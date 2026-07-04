@@ -1,19 +1,15 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config";
 
-// Konfigurasi koneksi Supabase dibaca dari environment Vite.
-// Isi web/.env.local (lihat web/.env.local.example):
-//   VITE_SUPABASE_URL=https://<project-ref>.supabase.co
-//   VITE_SUPABASE_ANON_KEY=<anon-public-key>
-//
-// Bila kosong, client otomatis fallback ke API FastAPI / data sample
-// (lihat web/src/api.ts) sehingga dashboard tetap tampil.
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-
-export const supabaseEnabled = Boolean(url && anonKey);
+// URL & anon key berasal dari config.ts (default produksi publik, dapat
+// dioverride via env VITE_SUPABASE_*). Selalu terisi → client selalu aktif,
+// sehingga deploy tidak bergantung pada konfigurasi env var Netlify.
+export const supabaseEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 export const supabase: SupabaseClient | null = supabaseEnabled
-  ? createClient(url!, anonKey!, { auth: { persistSession: false } })
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    })
   : null;
 
 // ── Identitas berbasis username ──────────────────────────────────────────────
