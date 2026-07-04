@@ -1,0 +1,40 @@
+# ── Rahasia — JANGAN PERNAH commit ──────────────────────────────────
+.env
+.env.*
+!.env.example
+.env.local
+web/.env.local
+web/.env.*.local
+config/gee-key.json
+*.pem
+*.key
+
+# ── Dependencies / build ────────────────────────────────────────────
+node_modules/
+web/node_modules/
+dist/
+web/dist/
+*.tsbuildinfo
+
+# ── Python ──────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Output pipeline ─────────────────────────────────────────────────
+results/
+cache/
+
+# ── Supabase CLI (state lokal, bisa berisi ref/kredensial) ──────────
+supabase/.temp/
+supabase/.branches/
+
+# ── Tooling lokal / OS ──────────────────────────────────────────────
+.claude/
+.DS_Store
+*.log
+_blueprint_extract.txt

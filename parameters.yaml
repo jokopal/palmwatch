@@ -1,0 +1,244 @@
+# PalmWatch — Konfigurasi Parameter EO dan Sumber Data
+# Setiap parameter memiliki: sumber, collection GEE, resolusi, frekuensi, band
+# Semua data open source dan tersedia gratis secara temporal
+
+parameters:
+
+  # ── INDEKS VEGETASI ──────────────────────────────────────────────────────────
+  ndvi:
+    label: "Normalized Difference Vegetation Index"
+    source: "Google Earth Engine"
+    collection_primary: "COPERNICUS/S2_SR_HARMONIZED"   # Sentinel-2 Surface Reflectance
+    collection_backup:  "LANDSAT/LC09/C02/T1_L2"        # Landsat-9 Level-2
+    resolution_m: 10
+    frequency: "5-12 hari"
+    temporal_type: "dynamic"
+    gee_formula: "(B8 - B4) / (B8 + B4)"               # Sentinel-2 NIR=B8, Red=B4
+    gee_formula_landsat: "(SR_B5 - SR_B4) / (SR_B5 + SR_B4)"
+    cloud_masking: true
+    composite_days: 16                                   # komposit 16-hari jika cloud >30%
+    unit: "dimensionless (-1 to 1)"
+    notes: "Gunakan komposit median 16-hari jika cloud cover tinggi (musim hujan Indonesia)"
+
+  evi:
+    label: "Enhanced Vegetation Index"
+    source: "Google Earth Engine"
+    collection_primary: "MODIS/061/MOD13A2"             # MODIS Terra 16-day, 1km
+    collection_hires:   "COPERNICUS/S2_SR_HARMONIZED"   # Hitung dari Sentinel-2
+    resolution_m: 1000
+    frequency: "16 hari"
+    temporal_type: "dynamic"
+    gee_band: "EVI"                                      # langsung tersedia di MOD13A2
+    gee_formula_s2: "2.5 * (B8 - B4) / (B8 + 6*B4 - 7.5*B2 + 1)"
+    unit: "dimensionless (-1 to 1)"
+    notes: "Lebih stabil dari NDVI untuk kanopi lebat. Kurangi saturasi di area NDVI>0.8"
+
+  lai:
+    label: "Leaf Area Index"
+    source: "Google Earth Engine"
+    collection: "MODIS/061/MCD15A3H"                    # MODIS Combined, 4-hari
+    resolution_m: 500
+    frequency: "4 hari"
+    temporal_type: "dynamic"
+    gee_band: "Lai_500m"
+    scale_factor: 0.1
+    valid_range: [0, 10]
+    unit: "m2/m2"
+    notes: "Korelasi kuat dengan jumlah pelepah aktif dan potensi TBS"
+
+  fpar:
+    label: "Fraction of Photosynthetically Active Radiation"
+    source: "Google Earth Engine"
+    collection: "MODIS/061/MCD15A3H"
+    resolution_m: 500
+    frequency: "4 hari"
+    temporal_type: "dynamic"
+    gee_band: "Fpar_500m"
+    scale_factor: 0.01
+    valid_range: [0, 1]
+    unit: "fraction (0-1)"
+
+  # ── SUHU DAN STRESS TERMAL ───────────────────────────────────────────────────
+  lst:
+    label: "Land Surface Temperature"
+    source: "Google Earth Engine"
+    collection: "MODIS/061/MOD11A1"                     # MODIS Terra daily, 1km
+    resolution_m: 1000
+    frequency: "Harian"
+    temporal_type: "dynamic"
+    gee_band: "LST_Day_1km"
+    scale_factor: 0.02
+    offset: -273.15                                      # Konversi Kelvin ke Celsius
+    unit: "Celsius"
+    notes: "Proxy suhu kanopi. Tinggi (>35C) kombinasi hujan rendah = drought stress"
+
+  # ── CURAH HUJAN ──────────────────────────────────────────────────────────────
+  rainfall_chirps:
+    label: "Curah Hujan Harian (CHIRPS)"
+    source: "CHC UCSB via GEE dan HTTP"
+    collection_gee: "UCSB-CHG/CHIRPS/DAILY"
+    api_http: "https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_daily/netcdf4/p05/"
+    resolution_m: 5566                                   # ~0.05 derajat
+    frequency: "Harian"
+    temporal_type: "dynamic"
+    gee_band: "precipitation"
+    unit: "mm/hari"
+    accumulation_windows: [30, 60, 90]                  # akumulasi (hari) yang dihitung
+    notes: "Tersedia sejak 1981. Gunakan akumulasi 90-hari untuk defisit kumulatif"
+
+  rainfall_gpm:
+    label: "Curah Hujan Real-time (GPM IMERG)"
+    source: "Google Earth Engine"
+    collection_gee: "NASA/GPM_L3/IMERG_V06"             # latency ~3.5 jam (late run)
+    resolution_m: 11132                                  # ~0.1 derajat
+    frequency: "30 menit (agregasi harian tersedia)"
+    temporal_type: "dynamic"
+    gee_band: "precipitationCal"
+    unit: "mm/jam"
+    notes: "Untuk near-real-time monitoring. CHIRPS lebih akurat historis karena corrected"
+
+  # ── EVAPOTRANSPIRASI ────────────────────────────────────────────────────────
+  et_modis:
+    label: "Evapotranspirasi Aktual (MODIS MOD16)"
+    source: "Google Earth Engine"
+    collection: "MODIS/061/MOD16A2"
+    resolution_m: 500
+    frequency: "8 hari"
+    temporal_type: "dynamic"
+    gee_band: "ET"
+    scale_factor: 0.1
+    unit: "kg/m2 per 8 hari (ekivalen mm)"
+    notes: "Gunakan untuk water stress index: ET_aktual / ET_potensial"
+
+  esi:
+    label: "Evaporative Stress Index"
+    source: "SERVIR Global (via NASA)"
+    api_url: "https://gis1.servirglobal.net/data/esi/"
+    resolution_m: 5000
+    frequency: "4 minggu"
+    temporal_type: "dynamic"
+    unit: "z-score anomaly"
+    download_method: "HTTP direktori"
+    notes: "Early signal flash drought. Negatif = stress. Unduh GeoTIFF regional"
+
+  # ── KELEMBABAN TANAH ────────────────────────────────────────────────────────
+  soil_moisture_smap:
+    label: "Soil Moisture (SMAP L4)"
+    source: "NASA NSIDC via CMR API"
+    collection_gee: "NASA/SMAP/SPL4SMGP/007"           # SMAP Global Pasture L4
+    api_cmr: "https://cmr.earthdata.nasa.gov/search/granules.json"
+    short_name: "SPL4SMGP"
+    resolution_m: 9000                                   # ~9 km
+    frequency: "3 jam (tersedia 8x/hari)"
+    temporal_type: "dynamic"
+    gee_band: "sm_surface"
+    unit: "m3/m3"
+    notes: "Perlu akun NASA Earthdata. Via GEE lebih mudah dari direct download"
+
+  # ── TANAH (STATIS) ────────────────────────────────────────────────────────
+  soil_ph:
+    label: "pH Tanah (SoilGrids)"
+    source: "ISRIC SoilGrids REST API"
+    api_rest: "https://rest.isric.org/soilgrids/v2.0/properties/query"
+    property: "phh2o"
+    depths: ["0-5cm", "5-15cm", "15-30cm"]
+    resolution_m: 250
+    frequency: "Statis (2023)"
+    temporal_type: "static"
+    unit: "pH*10 (divide by 10 untuk nilai asli)"
+    notes: "< 45 (pH 4.5) = asam kritis untuk sawit. Butuh pengapuran"
+
+  soil_soc:
+    label: "Soil Organic Carbon (SoilGrids)"
+    source: "ISRIC SoilGrids REST API"
+    api_rest: "https://rest.isric.org/soilgrids/v2.0/properties/query"
+    property: "soc"
+    depths: ["0-5cm", "5-15cm", "15-30cm"]
+    resolution_m: 250
+    frequency: "Statis (2023)"
+    temporal_type: "static"
+    unit: "dg/kg (divide by 10 untuk g/kg)"
+    notes: "Indikator kesuburan. SOC rendah = potensi defisiensi N organik"
+
+  soil_clay:
+    label: "Fraksi Lempung (SoilGrids)"
+    source: "ISRIC SoilGrids REST API"
+    api_rest: "https://rest.isric.org/soilgrids/v2.0/properties/query"
+    property: "clay"
+    depths: ["0-5cm", "5-15cm", "15-30cm"]
+    resolution_m: 250
+    temporal_type: "static"
+    unit: "g/kg"
+
+  soil_sand:
+    label: "Fraksi Pasir (SoilGrids)"
+    source: "ISRIC SoilGrids REST API"
+    api_rest: "https://rest.isric.org/soilgrids/v2.0/properties/query"
+    property: "sand"
+    depths: ["0-5cm", "5-15cm", "15-30cm"]
+    resolution_m: 250
+    temporal_type: "static"
+    unit: "g/kg"
+
+  soil_cec:
+    label: "Cation Exchange Capacity (SoilGrids)"
+    source: "ISRIC SoilGrids REST API"
+    api_rest: "https://rest.isric.org/soilgrids/v2.0/properties/query"
+    property: "cec"
+    depths: ["0-5cm", "5-15cm"]
+    resolution_m: 250
+    temporal_type: "static"
+    unit: "mmol(c)/kg"
+    notes: "Kapasitas tukar kation — proxy ketersediaan nutrisi"
+
+  # ── TOPOGRAFI (STATIS) ───────────────────────────────────────────────────────
+  dem:
+    label: "Digital Elevation Model"
+    source: "Google Earth Engine"
+    collection: "USGS/SRTMGL1_003"                      # SRTM 30m
+    resolution_m: 30
+    temporal_type: "static"
+    gee_band: "elevation"
+    unit: "meter dpl"
+
+  slope:
+    label: "Kemiringan Lereng"
+    source: "Google Earth Engine (derived dari DEM)"
+    collection: "USGS/SRTMGL1_003"
+    resolution_m: 30
+    temporal_type: "static"
+    gee_terrain_function: "ee.Terrain.slope()"
+    unit: "derajat"
+    notes: "Slope > 25 derajat = risiko erosi, tidak ideal untuk sawit"
+
+  twi:
+    label: "Topographic Wetness Index"
+    source: "Google Earth Engine (derived dari DEM)"
+    resolution_m: 30
+    temporal_type: "static"
+    formula: "ln(flow_accumulation / tan(slope_radians))"
+    unit: "dimensionless"
+    notes: "Tinggi = rentan tergenang. Penting untuk desain drainase"
+
+  # ── SAR (BACKUP CLOUD COVER) ─────────────────────────────────────────────────
+  sar_vv:
+    label: "SAR Backscatter VV (Sentinel-1)"
+    source: "Google Earth Engine"
+    collection: "COPERNICUS/S1_GRD"
+    resolution_m: 10
+    frequency: "6-12 hari"
+    temporal_type: "dynamic"
+    gee_band: "VV"
+    unit: "dB"
+    notes: "Backup saat Sentinel-2 tertutup awan >50%. VV sensitive terhadap struktur kanopi"
+
+  sar_vh:
+    label: "SAR Backscatter VH (Sentinel-1)"
+    source: "Google Earth Engine"
+    collection: "COPERNICUS/S1_GRD"
+    resolution_m: 10
+    frequency: "6-12 hari"
+    temporal_type: "dynamic"
+    gee_band: "VH"
+    unit: "dB"
+    notes: "VH/VV ratio proxy biomassa. Gunakan saat optical tidak tersedia"

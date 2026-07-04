@@ -1,0 +1,19 @@
+# Netlify — build & deploy frontend PalmWatch (folder web/).
+# ENV VARS (set di Netlify UI → Site settings → Environment variables, JANGAN commit):
+#   VITE_SUPABASE_URL         = https://lhpickvmnurgcduvfskz.supabase.co
+#   VITE_SUPABASE_ANON_KEY    = <anon public key>
+#   (opsional) VITE_USERNAME_EMAIL_DOMAIN = gmail.com
+
+[build]
+  base = "web"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback (client-side, tanpa server routing).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

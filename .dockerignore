@@ -1,0 +1,15 @@
+.git
+__pycache__
+*.pyc
+.venv
+venv
+.env
+.env.local
+*.egg-info
+dist
+build
+node_modules
+web/node_modules
+results/
+cache/
+.gitignore

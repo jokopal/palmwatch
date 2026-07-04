@@ -1,0 +1,119 @@
+# PalmWatch — Threshold Agronomis Kelapa Sawit
+# Semua nilai berdasarkan literatur yang dikutip
+# Semua threshold dapat di-override per tenant/lokasi
+
+thresholds:
+  ndvi:
+    critical_low:  0.35   # Sangat stres / indikasi penyakit berat
+    stress:        0.45   # Stres ringan-sedang (Srestasathiern et al., 2014)
+    normal_low:    0.55
+    optimal:       0.75   # Sawit dewasa sehat (Chemura et al., 2017)
+    saturation:    0.85   # Di atas ini: NDVI sering saturasi di kanopi lebat
+
+  evi:
+    critical_low:  0.20
+    stress:        0.30
+    normal_low:    0.40
+    optimal:       0.60
+
+  lai:
+    critical_low:  2.0    # Sangat rendah — defisiensi pelepah
+    stress:        3.0
+    normal_low:    4.0
+    optimal:       6.0    # LAI optimal sawit dewasa
+    unit: "m2/m2"
+
+  lst_celsius:
+    critical_high: 38.0   # Potensi heat stress
+    stress_high:   35.0   # Mulai berpengaruh pada pembentukan buah
+    optimal_max:   32.0
+    optimal_min:   24.0
+    unit: "Celsius"
+
+  rainfall_monthly_mm:
+    critical_low:  100    # Defisit air berat — butuh irigasi
+    stress:        150    # Di bawah ini mulai berpengaruh ke TBS
+    optimal_min:   150
+    optimal_max:   250    # Di atas 300 mm/bulan risiko anaerobik
+    critical_high: 400    # Genangan jika drainase buruk
+    source: "Corley & Tinker, 2003"
+    unit: "mm/bulan"
+
+  rainfall_annual_mm:
+    critical_low:  1500
+    optimal_min:   1800
+    optimal_max:   2500
+    critical_high: 3500
+    source: "Corley & Tinker, 2003"
+    unit: "mm/tahun"
+
+  soil_ph:
+    critical_low:  4.0    # Sangat asam, Al toxicity
+    stress_low:    4.5    # Butuh pengapuran (Fairhurst & Hardter, 2003)
+    optimal_min:   4.8
+    optimal_max:   5.5
+    stress_high:   6.5    # Mulai mengurangi ketersediaan Fe, Mn
+    unit: "pH"
+
+  soil_soc_g_per_kg:
+    critical_low:  5.0    # Sangat miskin bahan organik
+    low:           10.0
+    optimal_min:   15.0
+    unit: "g/kg"
+
+  et_stress_ratio:
+    # ET_aktual / ET_potensial
+    critical_low:  0.50   # Stress berat
+    stress:        0.70
+    optimal_min:   0.85
+    unit: "rasio"
+
+  soil_moisture_m3m3:
+    critical_low:  0.15   # Wilting point untuk tanah mineral tropis
+    stress:        0.20
+    field_capacity: 0.35
+    saturation:    0.45   # Di atas ini: anaerobic stress
+    unit: "m3/m3"
+
+# Kombinasi threshold untuk trigger intervensi
+intervention_triggers:
+  irrigation:
+    conditions:
+      - parameter: ndvi
+        operator: "<"
+        value: 0.45
+      - parameter: rainfall_monthly_mm
+        operator: "<"
+        value: 150
+    logic: "AND"
+    priority: 1
+
+  fertilization_n:
+    conditions:
+      - parameter: ndvi
+        operator: "<"
+        value: 0.50
+      - parameter: soil_soc_g_per_kg
+        operator: "<"
+        value: 10.0
+    logic: "AND"
+    priority: 2
+
+  liming:
+    conditions:
+      - parameter: soil_ph
+        operator: "<"
+        value: 4.5
+    logic: "SINGLE"
+    priority: 2
+
+  drainage:
+    conditions:
+      - parameter: twi
+        operator: ">"
+        value: 8.0
+      - parameter: rainfall_monthly_mm
+        operator: ">"
+        value: 300
+    logic: "AND"
+    priority: 3
