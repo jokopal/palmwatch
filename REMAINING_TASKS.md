@@ -12,18 +12,16 @@
 
 ---
 
-## 🟡 Todo (prioritas)
+## 🔵 Sedang dikerjakan berikutnya
 
 - [ ] **#2 Layer produksi = SHP boundary nyata (bukan "Harvest Blocks" default)**
   Perlakukan sebagai produksi: layer blok berasal dari boundary yang diupload/di-assign
-  per project, bukan seed demo. Butuh: kaitkan `blocks`/boundary ke project, hilangkan
-  ketergantungan layer default, workflow assign SHP → analitik.
+  **per project** (kini `blocks.project_id` sudah ada dari #4). Butuh: workflow upload
+  SHP → jadi blok project (bukan hanya vector_layers), hilangkan ketergantungan seed demo.
 
-- [ ] **#4 Project groups + switch/new project + share link**
-  Model multi-project (beda kebun/estate). Menu switch project & new project di web.
-  **Share link display** (read-only, tanpa login) agar petani bisa lihat via link.
-  Butuh: tabel `projects` (+ `project_members`), scoping data per project, RLS,
-  halaman publik `/share/:token`. Fondasi bisnis SaaS.
+---
+
+## 🟡 Todo (prioritas)
 
 - [ ] **#5 3D view basemap + layer (elevation / z-index)**
   MapLibre 3D: terrain (DEM) + sky, ekstrusi layer mengikuti elevation/z-index,
@@ -51,6 +49,10 @@
 
 ## ✅ Selesai (riwayat ringkas)
 
+- [x] **#4 Project groups + share link** — tabel `projects` + `project_id` (blocks/
+  vector_layers) + RLS + RPC (list/create/set_public/shared_project), scoping data per
+  project, ProjectSwitcher header (switch/new/share), **share view publik read-only**
+  (`?share=<token>`, tanpa login) untuk petani. Migrasi applied ke DB live + terverifikasi.
 - [x] **#1 Bottom panel analisis** — `BottomPanel.tsx` dirombak jadi 3 tab pakai data
   NYATA (hapus mock): Attribute Table (join field layer aktif), Temporal (RPC
   block_timeseries), Conclusion (kondisi→intervensi→yield gate R²). Terverifikasi live.

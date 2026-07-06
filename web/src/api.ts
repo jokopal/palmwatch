@@ -20,12 +20,14 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 }
 
 export const api = {
-  summary: () =>
-    supabaseEnabled ? rpc<Summary>("block_summary") : getJson<Summary>("/summary"),
-
-  blocks: (priority?: string) =>
+  summary: (projectId?: string | null) =>
     supabaseEnabled
-      ? rpc<BlockCollection>("blocks_geojson", { p_priority: priority ?? null })
+      ? rpc<Summary>("block_summary", { p_project_id: projectId ?? null })
+      : getJson<Summary>("/summary"),
+
+  blocks: (projectId?: string | null, priority?: string) =>
+    supabaseEnabled
+      ? rpc<BlockCollection>("blocks_geojson", { p_project_id: projectId ?? null, p_priority: priority ?? null })
       : getJson<BlockCollection>(priority ? `/blocks?priority=${priority}` : "/blocks"),
 
   timeseries: (id: string) =>

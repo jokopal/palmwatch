@@ -9,11 +9,17 @@ import FloatingLegend from "./components/FloatingLegend";
 import LeftPanel from "./components/LeftPanel";
 import BottomPanel from "./components/BottomPanel";
 import ProfileMenu from "./components/ProfileMenu";
+import ProjectSwitcher from "./components/ProjectSwitcher";
+import SharedView from "./components/SharedView";
 import Login from "./components/Login";
 import { api } from "./api";
 import { supabase } from "./supabase";
 import { useMapStore } from "./store/mapStore";
+import { listProjects, type Project } from "./projects";
 import type { BlockCollection, Summary } from "./types";
+
+// Deteksi mode share publik (?share=<token>) sekali di awal.
+const SHARE_TOKEN = new URLSearchParams(window.location.search).get("share");
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -23,7 +29,11 @@ export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
+  // Project (multi-kebun) — #4
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+
   // State for main map synchronization
   const [mainMap, setMainMap] = useState<maplibregl.Map | null>(null);
 
@@ -50,13 +60,32 @@ export default function App() {
     return () => authListener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const previewBypass = Boolean(import.meta.env.VITE_PREVIEW_NO_AUTH);
-    if (authChecking || (!session && supabase && !previewBypass)) return;
+  const previewBypass = Boolean(import.meta.env.VITE_PREVIEW_NO_AUTH);
+  const authed = !authChecking && Boolean(session || !supabase || previewBypass);
 
-    api.summary().then(setSummary).catch((e) => setError(String(e)));
-    api.blocks().then(setData).catch((e) => setError(String(e)));
-  }, [session, authChecking]);
+  const reloadProjects = () => {
+    listProjects().then((ps) => {
+      setProjects(ps);
+      setProjectId((cur) => cur ?? ps[0]?.id ?? null);
+    });
+  };
+
+  // Muat daftar project saat sudah terautentikasi.
+  useEffect(() => {
+    if (!authed) return;
+    reloadProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
+
+  // Fetch data blok/summary di-scope per project.
+  useEffect(() => {
+    if (!authed) return;
+    api.summary(projectId).then(setSummary).catch((e) => setError(String(e)));
+    api.blocks(projectId).then(setData).catch((e) => setError(String(e)));
+  }, [authed, projectId]);
+
+  // Mode share publik (read-only, tanpa login) — untuk petani via link.
+  if (SHARE_TOKEN) return <SharedView token={SHARE_TOKEN} />;
 
   if (authChecking) {
     return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'var(--bg)', fontFamily: 'var(--font-mono)' }}>INITIALIZING SYSTEM...</div>;
@@ -77,9 +106,13 @@ export default function App() {
           <span>Precision Intelligence</span>
         </div>
         
-        <div className="header-title">
-          PLANTATION MONITOR EXPLORING TOOL
-        </div>
+        <ProjectSwitcher
+          projects={projects}
+          currentId={projectId}
+          canManage={Boolean(session)}
+          onSwitch={setProjectId}
+          onProjectsChanged={reloadProjects}
+        />
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           {summary && (
