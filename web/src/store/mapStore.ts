@@ -100,7 +100,7 @@ const GEE_COLORS: Record<string, string> = {
 
 let state: MapState = {
   basemap: DEFAULT_BASEMAP,
-  insetsEnabled: true,
+  insetsEnabled: false, // default: peta tampil penuh tanpa inset
   insets: [
     { id: "inset-1", layer: "ndvi" },
     { id: "inset-2", layer: "rain" },

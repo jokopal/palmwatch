@@ -321,6 +321,17 @@ html, body, #root {
 .share-detail h3 { margin: 0; }
 .share-detail-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
 
+/* ── Error boundary ───────────────────────────────────────────────── */
+.error-boundary { height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); padding: 24px; }
+.eb-card { max-width: 460px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 28px; text-align: center; box-shadow: 0 10px 30px rgba(14,48,90,0.15); }
+.eb-icon { font-size: 40px; color: var(--warning); }
+.eb-card h2 { margin: 10px 0 6px; font-family: var(--font-display); font-size: 18px; }
+.eb-card p { color: var(--text-dim); font-size: 13px; margin: 0 0 12px; }
+.eb-detail { text-align: left; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--critical); overflow: auto; max-height: 120px; white-space: pre-wrap; }
+.eb-actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+.eb-btn { padding: 8px 16px; border: 1px solid var(--border); background: var(--panel); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); font-size: 12px; }
+.eb-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
 .app {
   display: flex;
   flex-direction: column;

@@ -63,25 +63,28 @@ log = get_logger("pipeline")
 
 
 def run_phase1(
-    blocks_path: str,
-    tenant_id: str,
-    start_date: str,
-    end_date: str,
+    blocks_path: Optional[str] = None,
+    tenant_id: str = "demo",
+    start_date: str = "",
+    end_date: str = "",
     output_dir: str = "results/",
     skip_static: bool = False,
     skip_db_write: bool = False,
+    blocks_gdf: Optional["gpd.GeoDataFrame"] = None,
 ) -> Dict:
     """
     Jalankan pipeline Fase 1 secara lengkap.
 
     Args:
-        blocks_path  : Path ke GeoJSON/Shapefile blok polygon
-        tenant_id    : ID perusahaan (untuk skema PostGIS)
+        blocks_path  : Path ke GeoJSON/Shapefile blok polygon (bila blocks_gdf None)
+        tenant_id    : ID perusahaan/project (untuk kolom tenant_id di PostGIS)
         start_date   : 'YYYY-MM-DD' awal periode monitoring
         end_date     : 'YYYY-MM-DD' akhir periode monitoring
         output_dir   : Direktori output GeoJSON dan CSV
         skip_static  : True jika data tanah/topografi sudah ada di DB
         skip_db_write: True untuk dry-run tanpa tulis ke DB
+        blocks_gdf   : GeoDataFrame blok siap-pakai (mis. dari Supabase per project).
+                       Bila diisi, blocks_path diabaikan.
 
     Returns:
         Dict summary: {n_blocks, n_eo_records, n_conditions, output_files}
@@ -92,11 +95,16 @@ def run_phase1(
     log.info(f"=== PalmWatch Fase 1 Pipeline ===")
     log.info(f"Tenant  : {tenant_id}")
     log.info(f"Periode : {start_date} - {end_date}")
-    log.info(f"Blok    : {blocks_path}")
+    log.info(f"Blok    : {blocks_path or '(GeoDataFrame)'}")
 
     # ── STEP 1: Load blok polygon ────────────────────────────────────────────
     log.info("Step 1/10: Load blok polygon")
-    gdf = load_blocks(blocks_path)
+    if blocks_gdf is not None:
+        gdf = blocks_gdf
+    elif blocks_path is not None:
+        gdf = load_blocks(blocks_path)
+    else:
+        raise ValueError("Sediakan blocks_path atau blocks_gdf")
     n_blocks = len(gdf)
     summary["n_blocks"] = n_blocks
     log.info(f"  {n_blocks} blok, total {gdf['area_ha'].sum():.0f} ha")

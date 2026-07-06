@@ -22,11 +22,13 @@
 
 ## 🟠 Backlog teknis (dari sesi sebelumnya)
 
-- [ ] **Pipeline GEE nyata (Fase 1-4)**: `pip install earthengine-api` + service account
-  (pilih "Data aplikasi"), jalankan pipeline → NDVI/LST asli ke Supabase `public`
-  (postgis_writer sudah align).
+- [ ] **Pipeline GEE — RUN** (butuh kredensial): jembatan sudah siap (`run_gee.py`,
+  `utils/supabase_blocks.load_project_blocks`, `pipeline.run_phase1(blocks_gdf=…)`,
+  aset katalog di `GEE_DATASETS.md`). Tinggal `pip install earthengine-api` + service
+  account (pilih "Data aplikasi") lalu `python run_gee.py --project <uuid> --start … --end …`
+  → NDVI/LST/hujan asli (di-mask batas blok project) ke Supabase.
 - [ ] **Render raster GEE** di peta (kini GEE hanya list/legend — butuh tile pipeline).
-- [ ] **Error Boundary + loading skeleton** (resiliensi UI).
+- [ ] **Loading skeleton** (Error Boundary ✅ selesai).
 - [ ] **CI GitHub Actions** (lint + test tiap push).
 - [ ] 🔴 **Rotasi kredensial** yang sempat bocor: DB password `pakuntungpeduli123` +
   service_role/secret key. Setelah rotasi: update `.env`, `web/.env.local`,
@@ -36,6 +38,13 @@
 
 ## ✅ Selesai (riwayat ringkas)
 
+- [x] **Startup tanpa inset** — `insetsEnabled` default `false`; peta tampil penuh saat
+  buka (inset dinyalakan via tombol ▣). Terverifikasi.
+- [x] **Error Boundary** — `ErrorBoundary` membungkus App (main.tsx); fallback + reload.
+- [x] **Jembatan GEE ↔ Supabase** — `utils/supabase_blocks.load_project_blocks` (baca
+  batas blok project, terverifikasi live 12 blok), `run_gee.py` (orchestrator per project),
+  `pipeline.run_phase1(blocks_gdf=…)`, `GEE_DATASETS.md` (aset katalog global di-mask
+  boundary blok). Run penuh butuh `earthengine-api` + service account.
 - [x] **#5 3D view** — MapLibre terrain (DEM terrarium) + sky + pitch; blok jadi
   **fill-extrusion** dengan tinggi = severity (z-index data-driven); toggle 2D/3D di
   MapTools. Layer & basemap mengikuti elevation. Terverifikasi visual.
