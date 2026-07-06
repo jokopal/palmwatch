@@ -12,20 +12,7 @@
 
 ---
 
-## 🔵 Sedang dikerjakan berikutnya
-
-- [ ] **#2 Layer produksi = SHP boundary nyata (bukan "Harvest Blocks" default)**
-  Perlakukan sebagai produksi: layer blok berasal dari boundary yang diupload/di-assign
-  **per project** (kini `blocks.project_id` sudah ada dari #4). Butuh: workflow upload
-  SHP → jadi blok project (bukan hanya vector_layers), hilangkan ketergantungan seed demo.
-
----
-
 ## 🟡 Todo (prioritas)
-
-- [ ] **#5 3D view basemap + layer (elevation / z-index)**
-  MapLibre 3D: terrain (DEM) + sky, ekstrusi layer mengikuti elevation/z-index,
-  basemap 3D. Toggle 2D/3D. Layer & basemap mengikuti ketinggian.
 
 - [ ] **#3 Role gating user vs admin** — *(HOLD atas permintaan user)*
   User = view-only; Admin = full (upload, edit simbologi, kelola project). Saat ini
@@ -49,6 +36,13 @@
 
 ## ✅ Selesai (riwayat ringkas)
 
+- [x] **#5 3D view** — MapLibre terrain (DEM terrarium) + sky + pitch; blok jadi
+  **fill-extrusion** dengan tinggi = severity (z-index data-driven); toggle 2D/3D di
+  MapTools. Layer & basemap mengikuti elevation. Terverifikasi visual.
+- [x] **#2 SHP boundary → blok produksi per project** — RPC `import_project_blocks`
+  (parse GeoJSON→blocks, area PostGIS, block_id prefix project = unik), geom dilonggarkan
+  ke Geometry. UploadTab mode "Batas blok project" vs "Layer referensi". Lepas dari seed
+  demo. Terverifikasi end-to-end di DB. (Follow-up: composite PK (project_id, block_id).)
 - [x] **#4 Project groups + share link** — tabel `projects` + `project_id` (blocks/
   vector_layers) + RLS + RPC (list/create/set_public/shared_project), scoping data per
   project, ProjectSwitcher header (switch/new/share), **share view publik read-only**

@@ -77,11 +77,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
+  const reloadData = () => {
+    api.summary(projectId).then(setSummary).catch((e) => setError(String(e)));
+    api.blocks(projectId).then(setData).catch((e) => setError(String(e)));
+  };
+
   // Fetch data blok/summary di-scope per project.
   useEffect(() => {
     if (!authed) return;
-    api.summary(projectId).then(setSummary).catch((e) => setError(String(e)));
-    api.blocks(projectId).then(setData).catch((e) => setError(String(e)));
+    reloadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, projectId]);
 
   // Mode share publik (read-only, tanpa login) — untuk petani via link.
@@ -191,7 +196,11 @@ export default function App() {
 
           {/* Right Area (Layer workspace panel) */}
           <Panel defaultSize={25} minSize={0} collapsible={true}>
-            <LeftPanel canUpload={!!session} />
+            <LeftPanel
+              canUpload={!!session}
+              projectId={projectId}
+              onBlocksImported={() => { reloadProjects(); reloadData(); }}
+            />
           </Panel>
 
         </PanelGroup>

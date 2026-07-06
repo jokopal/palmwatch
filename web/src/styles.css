@@ -176,6 +176,10 @@ html, body, #root {
 .upload-head { display: flex; align-items: center; justify-content: space-between; }
 .upload-close { width: 24px; height: 24px; border: 1px solid var(--border); background: var(--panel); border-radius: 4px; cursor: pointer; }
 .upload-hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin: 0; }
+.upload-mode { display: flex; flex-direction: column; gap: 6px; }
+.upload-mode label { display: flex; align-items: baseline; gap: 8px; font-size: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.upload-mode label.on { border-color: var(--accent); background: #e6effb; }
+.upload-mode label span { color: var(--text-dim); font-size: 10px; }
 .upload-drop {
   display: flex; align-items: center; justify-content: center; padding: 20px; border: 2px dashed var(--border);
   border-radius: 8px; cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); text-align: center;

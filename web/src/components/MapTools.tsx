@@ -4,9 +4,17 @@ import { mapStore, useMapStore } from "../store/mapStore";
 export default function MapTools() {
   const insetsEnabled = useMapStore((s) => s.insetsEnabled);
   const count = useMapStore((s) => s.insets.length);
+  const threeD = useMapStore((s) => s.threeD);
 
   return (
     <div className="map-tools">
+      <button
+        className={`map-tool${threeD ? " active" : ""}`}
+        onClick={() => mapStore.setThreeD(!threeD)}
+        title={threeD ? "Kembali ke 2D" : "Mode 3D (terrain + ekstrusi)"}
+      >
+        {threeD ? "2D" : "3D"}
+      </button>
       <button
         className={`map-tool${insetsEnabled ? " active" : ""}`}
         onClick={() => mapStore.setInsetsEnabled(!insetsEnabled)}

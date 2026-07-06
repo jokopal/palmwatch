@@ -8,10 +8,12 @@ interface Props {
   // Upload butuh sesi terautentikasi (RLS: insert utk authenticated). Bukan
   // sekadar role admin — cukup login agar tidak terblokir metadata role.
   canUpload: boolean;
+  projectId: string | null;
+  onBlocksImported?: () => void;
 }
 
 // Panel kiri bertab: "Layers" (manajemen + simbologi) & "Upload" (SHP/GeoJSON->DB).
-export default function LeftPanel({ canUpload }: Props) {
+export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Props) {
   const tab = useMapStore((s) => s.leftTab);
 
   // Muat daftar layer DB sekali di awal.
@@ -45,7 +47,11 @@ export default function LeftPanel({ canUpload }: Props) {
         {tab === "layers" ? (
           <LayersTab onAddDb={handleAddDb} />
         ) : (
-          <UploadTab onClose={() => mapStore.setLeftTab("layers")} />
+          <UploadTab
+            onClose={() => mapStore.setLeftTab("layers")}
+            projectId={projectId}
+            onImported={onBlocksImported}
+          />
         )}
       </div>
     </div>

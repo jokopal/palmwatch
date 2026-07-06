@@ -58,6 +58,7 @@ export interface MapState {
   selectedLayerId: string | null;
   dbLayers: AvailableLayer[]; // layer hasil upload (dari DB)
   leftTab: "layers" | "upload";
+  threeD: boolean; // mode 3D (terrain + ekstrusi)
 }
 
 const MAX_INSETS = 3;
@@ -116,6 +117,7 @@ let state: MapState = {
   selectedLayerId: "layer-blocks",
   dbLayers: [],
   leftTab: "layers",
+  threeD: false,
 };
 
 const listeners = new Set<() => void>();
@@ -204,6 +206,9 @@ export const mapStore = {
 
   // Tab panel kiri
   setLeftTab: (leftTab: "layers" | "upload") => set({ leftTab }),
+
+  // Mode 3D
+  setThreeD: (threeD: boolean) => set({ threeD }),
 
   MAX_INSETS,
 };

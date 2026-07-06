@@ -1,13 +1,23 @@
 import { useState } from "react";
 import shp from "shpjs";
 import { listVectorLayers, insertVectorLayer } from "../vectorLayers";
+import { importProjectBlocks } from "../projects";
 import { mapStore } from "../store/mapStore";
 
 type FC = GeoJSON.FeatureCollection;
+type Mode = "blocks" | "layer";
 
-// Tab "Upload": unggah SHP (zip) / GeoJSON ke database (public.vector_layers)
-// agar dapat dipanggil kembali sebagai layer. Konfigurasi via panel ini.
-export default function UploadTab({ onClose }: { onClose?: () => void }) {
+interface Props {
+  onClose?: () => void;
+  projectId: string | null;
+  onImported?: () => void; // reload data dashboard setelah import blok
+}
+
+// Tab "Upload": unggah SHP (zip) / GeoJSON. Dua mode:
+//  - "blocks": jadi batas blok produksi milik project (dianalisis pipeline).
+//  - "layer" : layer referensi (public.vector_layers) untuk overlay.
+export default function UploadTab({ onClose, projectId, onImported }: Props) {
+  const [mode, setMode] = useState<Mode>("blocks");
   const [name, setName] = useState("");
   const [fc, setFc] = useState<FC | null>(null);
   const [busy, setBusy] = useState(false);
@@ -26,15 +36,12 @@ export default function UploadTab({ onClose }: { onClose?: () => void }) {
     setErr(null);
     setMsg("Membaca file…");
     try {
-      let parsed: FC;
-      if (file.name.toLowerCase().endsWith(".zip")) {
-        parsed = normalize(await shp(await file.arrayBuffer()));
-      } else {
-        parsed = normalize(JSON.parse(await file.text()));
-      }
+      const parsed = file.name.toLowerCase().endsWith(".zip")
+        ? normalize(await shp(await file.arrayBuffer()))
+        : normalize(JSON.parse(await file.text()));
       setFc(parsed);
       setName((n) => n || file.name.replace(/\.(zip|geojson|json)$/i, ""));
-      setMsg(`Terbaca: ${parsed.features.length} fitur. Siap diupload.`);
+      setMsg(`Terbaca: ${parsed.features.length} fitur. Siap diproses.`);
     } catch (e2) {
       setErr(`Gagal parse: ${(e2 as Error).message}`);
       setFc(null);
@@ -44,20 +51,29 @@ export default function UploadTab({ onClose }: { onClose?: () => void }) {
     }
   };
 
-  const upload = async () => {
-    if (!fc || !name.trim()) return;
+  const submit = async () => {
+    if (!fc) return;
     setBusy(true);
     setErr(null);
-    setMsg("Mengupload ke database…");
-    const res = await insertVectorLayer(name.trim(), fc);
-    if (res.ok) {
-      setMsg(`Berhasil menyimpan layer "${name.trim()}".`);
-      setFc(null);
-      setName("");
-      mapStore.setDbLayers(await listVectorLayers());
+
+    if (mode === "blocks") {
+      if (!projectId) { setErr("Pilih/ buat project dulu sebelum import batas blok."); setBusy(false); return; }
+      setMsg("Mengimpor batas blok ke project…");
+      const res = await importProjectBlocks(projectId, fc);
+      if (res.ok) {
+        setMsg(`Berhasil impor ${res.imported} blok ke project. Memuat ulang peta…`);
+        setFc(null); setName("");
+        onImported?.();
+      } else { setErr(res.error ?? "Import gagal."); setMsg(null); }
     } else {
-      setErr(res.error ?? "Upload gagal.");
-      setMsg(null);
+      if (!name.trim()) { setErr("Isi nama layer."); setBusy(false); return; }
+      setMsg("Menyimpan layer referensi…");
+      const res = await insertVectorLayer(name.trim(), fc);
+      if (res.ok) {
+        setMsg(`Berhasil menyimpan layer "${name.trim()}".`);
+        setFc(null); setName("");
+        mapStore.setDbLayers(await listVectorLayers());
+      } else { setErr(res.error ?? "Upload gagal."); setMsg(null); }
     }
     setBusy(false);
   };
@@ -65,12 +81,25 @@ export default function UploadTab({ onClose }: { onClose?: () => void }) {
   return (
     <div className="upload-tab">
       <div className="upload-head">
-        <h3 className="sidebar-title">Upload Layer ke Database</h3>
+        <h3 className="sidebar-title">Upload SHP / GeoJSON</h3>
         {onClose && <button className="upload-close" onClick={onClose} title="Kembali ke Layers">✕</button>}
       </div>
+
+      <div className="upload-mode">
+        <label className={mode === "blocks" ? "on" : ""}>
+          <input type="radio" checked={mode === "blocks"} onChange={() => setMode("blocks")} />
+          Batas blok project <span>(jadi blok produksi & dianalisis)</span>
+        </label>
+        <label className={mode === "layer" ? "on" : ""}>
+          <input type="radio" checked={mode === "layer"} onChange={() => setMode("layer")} />
+          Layer referensi <span>(overlay, tidak dianalisis)</span>
+        </label>
+      </div>
+
       <p className="upload-hint">
-        Unggah <b>Shapefile (.zip)</b> atau <b>GeoJSON</b> (mis. batas kebun). Layer
-        disimpan ke database dan bisa ditambahkan ke peta kapan saja.
+        {mode === "blocks"
+          ? "Unggah batas kebun/blok (.zip Shapefile atau GeoJSON). Setiap poligon menjadi blok milik project aktif; analitik EO menyusul dari pipeline."
+          : "Unggah layer referensi (mis. jalan, sungai) yang disimpan ke database dan bisa ditambahkan ke peta."}
       </p>
 
       <label className="upload-drop">
@@ -78,15 +107,15 @@ export default function UploadTab({ onClose }: { onClose?: () => void }) {
         <span>⭱ Pilih file (.zip / .geojson)</span>
       </label>
 
-      {fc && (
+      {fc && mode === "layer" && (
         <div className="control-group">
           <label className="control-label">Nama layer</label>
-          <input className="control-select" value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Batas Kebun Blok A" />
+          <input className="control-select" value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Jaringan Jalan" />
         </div>
       )}
 
-      <button className="upload-submit" onClick={upload} disabled={!fc || !name.trim() || busy}>
-        {busy ? "Uploading…" : "Simpan ke Database"}
+      <button className="upload-submit" onClick={submit} disabled={!fc || busy}>
+        {busy ? "Memproses…" : mode === "blocks" ? "Import sebagai blok project" : "Simpan layer referensi"}
       </button>
 
       {msg && <div className="upload-msg ok">{msg}</div>}

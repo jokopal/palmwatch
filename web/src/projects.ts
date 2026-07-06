@@ -63,6 +63,22 @@ export async function getSharedProject(token: string): Promise<SharedProject | n
   return data as SharedProject;
 }
 
+/** Import FeatureCollection boundary sebagai blok produksi milik project. */
+export async function importProjectBlocks(
+  projectId: string,
+  geojson: GeoJSON.FeatureCollection,
+  idField?: string,
+): Promise<{ ok: boolean; imported?: number; error?: string }> {
+  if (!supabase) return { ok: false, error: "Supabase not configured" };
+  const { data, error } = await supabase.rpc("import_project_blocks", {
+    p_project_id: projectId,
+    p_geojson: geojson,
+    p_id_field: idField ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, imported: (data as { imported: number })?.imported ?? 0 };
+}
+
 /** Bangun URL share publik untuk sebuah token. */
 export function shareUrl(token: string): string {
   return `${window.location.origin}/?share=${token}`;

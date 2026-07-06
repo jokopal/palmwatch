@@ -93,6 +93,45 @@ export default function MapView({
     }
   }
 
+  // Mode 3D: terrain (DEM) + ekstrusi blok (tinggi = severity) + pitch.
+  // Hanya untuk peta utama (bukan inset).
+  function apply3D() {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || colorByRef.current) return;
+    const on = mapStore.getState().threeD;
+    if (on) {
+      if (!map.getSource("dem")) {
+        map.addSource("dem", {
+          type: "raster-dem",
+          tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+          encoding: "terrarium", tileSize: 256, maxzoom: 14,
+        });
+      }
+      map.setTerrain({ source: "dem", exaggeration: 1.4 });
+      try {
+        map.setSky({ "sky-color": "#8ec5fc", "horizon-color": "#eaf3ff", "fog-color": "#ffffff", "fog-ground-blend": 0.6 } as never);
+      } catch { /* sky opsional */ }
+      if (map.getSource("blocks") && !map.getLayer("blocks-3d")) {
+        map.addLayer({
+          id: "blocks-3d", type: "fill-extrusion", source: "blocks",
+          paint: {
+            "fill-extrusion-color": fillColor(undefined) as never,
+            "fill-extrusion-height": ["+", 150, ["*", ["coalesce", ["get", "severity_score"], 0.5], 180]] as never,
+            "fill-extrusion-base": 0,
+            "fill-extrusion-opacity": 0.9,
+          },
+        });
+      }
+      if (map.getLayer("blocks-fill")) map.setLayoutProperty("blocks-fill", "visibility", "none");
+      if (map.getPitch() < 25) map.easeTo({ pitch: 60, duration: 700 });
+    } else {
+      try { map.setTerrain(null as never); } catch { /* ignore */ }
+      if (map.getLayer("blocks-3d")) map.removeLayer("blocks-3d");
+      if (map.getLayer("blocks-fill")) map.setLayoutProperty("blocks-fill", "visibility", blocksVisible() ? "visible" : "none");
+      if (map.getPitch() > 5) map.easeTo({ pitch: 0, duration: 700 });
+    }
+  }
+
   function render() {
     const map = mapRef.current;
     const fc = dataRef.current;
@@ -143,6 +182,7 @@ export default function MapView({
       }
     }
     if (!b.isEmpty() && interactive) map.fitBounds(b, { padding: 60, duration: 0 });
+    apply3D(); // pasang ekstrusi bila 3D sudah aktif saat data masuk
   }
 
   // Init map sekali
@@ -160,6 +200,7 @@ export default function MapView({
     map.on("load", () => {
       loadedRef.current = true;
       if (onMapLoad) onMapLoad(map);
+      if (import.meta.env.DEV && interactive) (window as unknown as { __map?: maplibregl.Map }).__map = map;
       render();
     });
     mapRef.current = map;
@@ -199,7 +240,9 @@ export default function MapView({
       for (const lid of ["blocks-fill", "blocks-line", "blocks-label"]) {
         if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", vis);
       }
+      if (map.getLayer("blocks-3d")) map.setPaintProperty("blocks-3d", "fill-extrusion-color", fillColor(undefined) as never);
     };
+    let cur3D = mapStore.getState().threeD;
     const unsub = mapStore.subscribe(() => {
       const map = mapRef.current;
       const next = mapStore.getState().basemap;
@@ -209,6 +252,8 @@ export default function MapView({
       }
       applySymbology();
       syncDbLayers();
+      const n3d = mapStore.getState().threeD;
+      if (n3d !== cur3D) { cur3D = n3d; apply3D(); }
     });
     return unsub;
   }, []);
