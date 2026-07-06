@@ -145,7 +145,7 @@ export default function App() {
 
               {/* Bottom: Detailed Analytics / Interventions */}
               <Panel defaultSize={30} minSize={0} collapsible={true}>
-                <BottomPanel data={data} selectedId={selectedId} />
+                <BottomPanel data={data} selectedId={selectedId} onSelect={setSelectedId} />
               </Panel>
 
             </PanelGroup>
