@@ -289,6 +289,11 @@ def _export_results(
                     lambda x: json.dumps(x) if isinstance(x, (list, dict)) else x
                 )
 
+        # Kolom Categorical (mis. priority_level dari pd.cut) tak didukung fiona.
+        for col in gdf_out.columns:
+            if str(gdf_out[col].dtype) == "category":
+                gdf_out[col] = gdf_out[col].astype(str)
+
         geojson_path = f"{output_dir}/conditions_{period}_{ts}.geojson"
         gdf_out.to_file(geojson_path, driver="GeoJSON")
         files["geojson_conditions"] = geojson_path

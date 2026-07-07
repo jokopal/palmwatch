@@ -9,7 +9,7 @@ const BASE = "/api";
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${path}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} - ${path}`);
   return res.json() as Promise<T>;
 }
 
@@ -43,17 +43,18 @@ export const api = {
   },
 };
 
-// Palet warna status blok (hijau/kuning/merah, lihat blueprint Fase 5).
+// Palet status blok selaras brand Pranata Bhumi (Deep Teal · Cyan · Stone)
 export const PRIORITY_COLOR: Record<string, string> = {
-  critical: "#dc2626",
-  warning: "#f59e0b",
-  monitor: "#eab308",
-  normal: "#16a34a",
+  critical: "#C0392B",   // merah dalam - kondisi kritis
+  warning:  "#D97706",   // amber profesional - peringatan
+  monitor:  "#CA8A04",   // kuning-gelap - pantau
+  normal:   "#16A34A",   // hijau sehat - optimal
 };
 
 export const PRIORITY_LABEL: Record<string, string> = {
   critical: "Kritis",
-  warning: "Peringatan",
-  monitor: "Pantau",
-  normal: "Sehat",
+  warning:  "Peringatan",
+  monitor:  "Pantau",
+  normal:   "Sehat",
 };
+

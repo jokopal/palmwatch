@@ -93,7 +93,22 @@ export default function App() {
   if (SHARE_TOKEN) return <SharedView token={SHARE_TOKEN} />;
 
   if (authChecking) {
-    return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'var(--bg)', fontFamily: 'var(--font-mono)' }}>INITIALIZING SYSTEM...</div>;
+    return (
+      <div style={{
+        height: '100vh', display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', alignItems: 'center',
+        background: 'linear-gradient(160deg, var(--color-teal-dark) 0%, var(--color-teal) 100%)',
+        gap: '20px',
+      }}>
+        <svg width="44" height="44" viewBox="0 0 56 56" fill="none">
+          <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#23B5C0" strokeWidth="2.5" fill="none" opacity="0.9"/>
+          <circle cx="28" cy="28" r="4.5" fill="#23B5C0"/>
+          <circle cx="28" cy="28" r="2" fill="#fff"/>
+        </svg>
+        <div style={{ fontFamily: 'var(--font-display)', color: '#fff', fontSize: '16px', fontWeight: 600, letterSpacing: '0.3px' }}>PalmWatch</div>
+        <div style={{ fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.5)', fontSize: '11px', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Memuat sistem…</div>
+      </div>
+    );
   }
 
   // If Supabase is enabled and no session, show Login.
@@ -107,10 +122,17 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="brand">
-          <b><span className="leaf">▲</span> PalmWatch</b>
-          <span>Precision Intelligence</span>
+          <b>
+            <svg width="18" height="18" viewBox="0 0 56 56" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#23B5C0" strokeWidth="3" fill="none"/>
+              <circle cx="28" cy="28" r="5" fill="#23B5C0"/>
+              <circle cx="28" cy="28" r="2" fill="#fff"/>
+            </svg>
+            PalmWatch
+          </b>
+          <span>by Pranata Bhumi</span>
         </div>
-        
+
         <ProjectSwitcher
           projects={projects}
           currentId={projectId}
@@ -121,9 +143,33 @@ export default function App() {
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           {summary && (
-            <div style={{ display: 'flex', gap: '16px', fontSize: '13px' }}>
-              <div>Total Area: <b style={{ fontFamily: 'var(--font-mono)' }}>{summary.total_area_ha} ha</b></div>
-              <div>Blocks: <b style={{ fontFamily: 'var(--font-mono)' }}>{summary.n_blocks}</b></div>
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'var(--font-data)', fontSize: 'var(--text-md)', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+                  {summary.total_area_ha} ha
+                </div>
+                <div style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Total Area</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'var(--font-data)', fontSize: 'var(--text-md)', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+                  {summary.n_blocks}
+                </div>
+                <div style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Blok</div>
+              </div>
+              {(summary.by_priority?.critical ?? 0) > 0 && (
+                <div style={{
+                  background: 'rgba(192,57,43,0.25)',
+                  border: '1px solid rgba(192,57,43,0.5)',
+                  borderRadius: 'var(--r-pill)',
+                  padding: '3px 10px',
+                  fontFamily: 'var(--font-data)',
+                  fontSize: 'var(--text-xs)',
+                  fontWeight: 700,
+                  color: '#f5a09a',
+                }}>
+                  {summary.by_priority.critical} Kritis
+                </div>
+              )}
             </div>
           )}
           <ProfileMenu session={session} />
@@ -158,7 +204,15 @@ export default function App() {
                     <FloatingLegend />
 
                     {error && (
-                      <div style={{ position: 'absolute', bottom: 16, left: 16, background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: '4px', zIndex: 10, fontSize: '12px' }}>
+                      <div style={{
+                        position: 'absolute', bottom: 16, left: 16,
+                        background: 'var(--critical-bg)', color: 'var(--critical)',
+                        padding: '8px 12px', borderRadius: 'var(--r-md)',
+                        zIndex: 10, fontSize: 'var(--text-xs)',
+                        fontFamily: 'var(--font-ui)',
+                        border: '1px solid rgba(192,57,43,0.2)',
+                        boxShadow: 'var(--shadow-sm)',
+                      }}>
                         API error: {error}
                       </div>
                     )}

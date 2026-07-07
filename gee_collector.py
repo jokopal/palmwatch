@@ -286,7 +286,7 @@ def get_lai_fpar_modis(
         ee.ImageCollection("MODIS/061/MCD15A3H")
         .filterDate(start_date, end_date)
         .filterBounds(fc)
-        .select(["Lai_500m", "Fpar_500m"])
+        .select(["Lai", "Fpar"])  # MODIS/061 MCD15A3H: nama band Lai/Fpar
         .map(lambda img: img
              .multiply(ee.Image([0.1, 0.01]))  # scale factors
              .copyProperties(img, img.propertyNames()))
@@ -307,8 +307,8 @@ def get_lai_fpar_modis(
         records.append({
             "block_id": props.get("block_id"),
             "date": props.get("date"),
-            "lai_mean": props.get("Lai_500m"),
-            "fpar_mean": props.get("Fpar_500m"),
+            "lai_mean": props.get("Lai"),
+            "fpar_mean": props.get("Fpar"),
         })
 
     df = pd.DataFrame(records)

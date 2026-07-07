@@ -59,7 +59,7 @@ export default function BottomPanel({ data, selectedId, onSelect }: Props) {
         <button className={`bp-tab${tab === "conclusion" ? " active" : ""}`} onClick={() => setTab("conclusion")} disabled={!isBlocks}>
           ✦ Conclusion
         </button>
-        <div className="bp-layer-name">Layer: <b>{activeLayer?.name ?? "—"}</b> · {features.length} fitur</div>
+        <div className="bp-layer-name">Layer: <b>{activeLayer?.name ?? "(none)"}</b> · {features.length} fitur</div>
       </div>
 
       <div className="bp-body">
@@ -120,8 +120,8 @@ function AttributeTable({
 }
 
 function fmt(v: unknown): string {
-  if (v == null) return "—";
-  if (Array.isArray(v)) return v.length ? `[${v.length}]` : "—";
+  if (v == null) return "-";
+  if (Array.isArray(v)) return v.length ? `[${v.length}]` : "-";
   if (typeof v === "object") return JSON.stringify(v).slice(0, 30);
   return String(v);
 }
@@ -146,11 +146,11 @@ function TemporalTab({ selectedId }: { selectedId: string | null }) {
   return (
     <div className="temporal-tab">
       <div className="temporal-stats">
-        <span>Blok <b>{ts.block_id}</b></span>
-        <span>Periode: <b>{ts.series.length}</b> bulan</span>
-        <span>NDVI terkini: <b>{last.ndvi}</b></span>
-        <span>Δ NDVI: <b style={{ color: Number(ndviTrend) >= 0 ? "var(--normal)" : "var(--critical)" }}>{ndviTrend}</b></span>
-        <span>TBS terkini: <b>{last.tbs_ton_ha} t/ha</b></span>
+        <span>Blok <b style={{ fontFamily: 'var(--font-data)' }}>{ts.block_id}</b></span>
+        <span>Periode: <b style={{ fontFamily: 'var(--font-data)' }}>{ts.series.length}</b> bulan</span>
+        <span>NDVI terkini: <b style={{ fontFamily: 'var(--font-data)' }}>{last.ndvi}</b></span>
+        <span>Δ NDVI: <b style={{ fontFamily: 'var(--font-data)', color: Number(ndviTrend) >= 0 ? 'var(--normal)' : 'var(--critical)' }}>{ndviTrend}</b></span>
+        <span>TBS terkini: <b style={{ fontFamily: 'var(--font-data)' }}>{last.tbs_ton_ha} t/ha</b></span>
       </div>
       <div className="temporal-chart"><TimeSeriesChart series={ts.series} /></div>
     </div>
@@ -184,14 +184,16 @@ function ConclusionTab({ feature }: { feature: BlockCollection["features"][0]["p
 
         <div className="concl-section-title">Proyeksi yield</div>
         <div className="yield-box">
-          <div><div className="l">Baseline</div><div className="big">{p.yield_baseline_ton_ha ?? "—"}</div></div>
-          <span className="arrow">→</span>
-          <div><div className="l">Setelah intervensi</div><div className="big">{p.yield_predicted_after_intervention ?? "—"}</div></div>
+          <div><div className="l">Baseline</div><div className="big">{p.yield_baseline_ton_ha ?? "--"}</div></div>
+          <span className="arrow">-&gt;</span>
+          <div><div className="l">Setelah intervensi</div><div className="big">{p.yield_predicted_after_intervention ?? "--"}</div></div>
           <span className="uplift">+{uplift}%</span>
         </div>
         <div className="disclaimer">
-          R² model = {p.regression_r2 ?? "—"} {r2Valid ? "(valid, ≥ 0,40)" : "(⚠ belum valid — rekomendasi generik)"}.
-          Lag efek adalah estimasi literatur; kondisi lokal dapat memengaruhi waktu respons aktual.
+          R2 model = {p.regression_r2 ?? "N/A"} {r2Valid
+            ? <span style={{ color: 'var(--normal)', fontWeight: 600 }}>(valid, ≥ 0,40)</span>
+            : <span style={{ color: 'var(--warning)', fontWeight: 600 }}>(belum valid - rekomendasi generik)</span>}.
+          {" "}Lag efek adalah estimasi literatur; kondisi lokal dapat memengaruhi waktu respons aktual.
         </div>
       </div>
 

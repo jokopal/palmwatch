@@ -57,9 +57,9 @@ export default function BlockPanel({ blockId, feature }: Props) {
 
       <div className="metrics">
         <div className="metric"><div className="l">NDVI</div><div className="v">{p.ndvi_value}</div></div>
-        <div className="metric"><div className="l">Curah hujan 30h</div><div className="v">{p.rainfall_30d_mm} mm</div></div>
-        <div className="metric"><div className="l">LST</div><div className="v">{p.lst_celsius} °C</div></div>
-        <div className="metric"><div className="l">pH tanah</div><div className="v">{p.soil_ph}</div></div>
+        <div className="metric"><div className="l">Curah Hujan 30h</div><div className="v">{p.rainfall_30d_mm} mm</div></div>
+        <div className="metric"><div className="l">LST</div><div className="v">{p.lst_celsius}°C</div></div>
+        <div className="metric"><div className="l">pH Tanah</div><div className="v">{p.soil_ph}</div></div>
         <div className="metric"><div className="l">SOC</div><div className="v">{p.soil_soc} g/kg</div></div>
         <div className="metric"><div className="l">LAI</div><div className="v">{p.lai_value}</div></div>
       </div>
@@ -99,19 +99,21 @@ export default function BlockPanel({ blockId, feature }: Props) {
           <div className="section-title">Proyeksi produktivitas</div>
           <div className="yield-box">
             <div>
-              <div className="l" style={{ fontSize: 10, color: "var(--text-dim)" }}>Baseline</div>
+              <div className="l">Baseline</div>
               <div className="big">{p.yield_baseline_ton_ha}</div>
             </div>
             <span className="arrow">→</span>
             <div>
-              <div className="l" style={{ fontSize: 10, color: "var(--text-dim)" }}>Setelah intervensi</div>
+              <div className="l">Setelah intervensi</div>
               <div className="big">{p.yield_predicted_after_intervention}</div>
             </div>
             <span className="uplift">+{uplift}% ton/ha</span>
           </div>
           <div className="disclaimer">
             R² model = {p.regression_r2}{" "}
-            {r2Valid ? "(valid, ≥ 0,40)" : "(⚠ belum valid, rekomendasi generik)"}.
+            {r2Valid
+              ? <span style={{ color: 'var(--normal)', fontWeight: 600 }}>(valid, ≥ 0,40)</span>
+              : <span style={{ color: 'var(--warning)', fontWeight: 600 }}>(⚠ belum valid, rekomendasi generik)</span>}.
             Lag efek adalah estimasi berbasis literatur; kondisi lokal dapat
             memengaruhi waktu respons aktual.
           </div>

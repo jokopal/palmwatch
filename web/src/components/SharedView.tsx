@@ -28,16 +28,26 @@ export default function SharedView({ token }: { token: string }) {
   return (
     <div className="share-app">
       <header className="share-header">
-        <div className="brand"><b><span className="leaf">▲</span> PalmWatch</b></div>
+        <div className="brand">
+          <b>
+            <svg width="16" height="16" viewBox="0 0 56 56" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#23B5C0" strokeWidth="3" fill="none"/>
+              <circle cx="28" cy="28" r="5" fill="#23B5C0"/>
+              <circle cx="28" cy="28" r="2" fill="#fff"/>
+            </svg>
+            PalmWatch
+          </b>
+          <span>by Pranata Bhumi</span>
+        </div>
         <div className="share-title">
           <b>{shared.project.name}</b>
           <span>{shared.project.estate ?? ""}</span>
         </div>
         <div className="share-kpis">
-          <span>{s.n_blocks} blok</span>
-          <span>{s.total_area_ha} ha</span>
-          <span className="k-crit">{s.by_priority.critical} kritis</span>
-          <span className="k-ok">{s.by_priority.normal} sehat</span>
+          <span style={{ fontFamily: 'var(--font-data)' }}>{s.n_blocks} blok</span>
+          <span style={{ fontFamily: 'var(--font-data)' }}>{s.total_area_ha} ha</span>
+          <span className="k-crit" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.critical} kritis</span>
+          <span className="k-ok" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.normal} sehat</span>
           <span className="share-badge">Tampilan publik · read-only</span>
         </div>
       </header>

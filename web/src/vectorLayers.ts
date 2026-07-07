@@ -60,7 +60,7 @@ export async function insertVectorLayer(
     return { ok: false, error: "Tabel 'vector_layers' belum ada di database. Jalankan migrasi Supabase (supabase db push) dulu." };
   }
   if (error.code === "42501" || /row-level security|policy/i.test(error.message)) {
-    return { ok: false, error: "Ditolak RLS — pastikan Anda login. Insert hanya untuk pengguna terautentikasi." };
+    return { ok: false, error: "Ditolak RLS - pastikan Anda login. Insert hanya untuk pengguna terautentikasi." };
   }
   return { ok: false, error: error.message };
 }

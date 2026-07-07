@@ -63,11 +63,11 @@ export interface MapState {
 
 const MAX_INSETS = 3;
 
-// Simbologi default untuk layer blok = kategorikal berdasar priority_level.
+// Simbologi default blok = kategorikal berdasar priority_level (brand colors).
 function defaultBlocksSymbology(): Symbology {
   return {
     mode: "categorized",
-    fill: "#3b82f6",
+    fill: "#0F4D3A",
     fillOpacity: 0.65,
     stroke: "#ffffff",
     strokeWidth: 1,
@@ -81,7 +81,7 @@ function defaultBlocksSymbology(): Symbology {
 }
 
 function defaultGeeSymbology(color: string): Symbology {
-  return { mode: "single", fill: color, fillOpacity: 0.55, stroke: "#334155", strokeWidth: 0.5, categories: [] };
+  return { mode: "single", fill: color, fillOpacity: 0.55, stroke: "#0F4D3A", strokeWidth: 0.5, categories: [] };
 }
 
 // Katalog layer GEE yang tersedia (statis; sumber raster/analitik).
@@ -95,7 +95,12 @@ export const GEE_AVAILABLE: AvailableLayer[] = [
 ];
 
 const GEE_COLORS: Record<string, string> = {
-  ndvi: "#16a34a", evi: "#65a30d", lst: "#dc2626", rain: "#2563eb", soil_moisture: "#0891b2", et: "#7c3aed",
+  ndvi:           "#16A34A",  // hijau sehat
+  evi:            "#4D7C0F",  // hijau gelap
+  lst:            "#C0392B",  // merah panas
+  rain:           "#1D6FA4",  // biru hujan
+  soil_moisture:  "#0891b2",  // biru-teal
+  et:             "#6D28D9",  // ungu evapotranspirasi
 };
 
 let state: MapState = {
