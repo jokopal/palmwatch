@@ -88,3 +88,35 @@ def load_blocks(path: str | Path) -> gpd.GeoDataFrame:
         total_area_ha=round(float(gdf["area_ha"].sum()), 1),
     )
     return gdf
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GEE helpers (import ee ditunda agar modul ini tetap dapat diimpor tanpa GEE)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def gdf_to_ee_featurecollection(gdf: gpd.GeoDataFrame) -> list:
+    """
+    Konversi GeoDataFrame blok → daftar ee.Feature (untuk ee.FeatureCollection).
+
+    Tiap fitur membawa properti `block_id` sehingga hasil zonal-stats GEE dapat
+    dipetakan balik ke blok. Geometri dianggap WGS84 (EPSG:4326), non-geodesic
+    agar tepi poligon lurus (sesuai batas kebun).
+    """
+    import ee
+    from shapely.geometry import mapping
+
+    g = gdf if gdf.crs is None or gdf.crs.to_epsg() == 4326 else gdf.to_crs("EPSG:4326")
+    features = []
+    for _, row in g.iterrows():
+        geom = ee.Geometry(mapping(row.geometry), "EPSG:4326", False)
+        features.append(ee.Feature(geom, {"block_id": str(row["block_id"])}))
+    return features
+
+
+def bbox_from_gdf(gdf: gpd.GeoDataFrame):
+    """Bounding box seluruh blok sebagai ee.Geometry.Rectangle (WGS84)."""
+    import ee
+
+    g = gdf if gdf.crs is None or gdf.crs.to_epsg() == 4326 else gdf.to_crs("EPSG:4326")
+    minx, miny, maxx, maxy = (float(v) for v in g.total_bounds)
+    return ee.Geometry.Rectangle([minx, miny, maxx, maxy], "EPSG:4326", False)

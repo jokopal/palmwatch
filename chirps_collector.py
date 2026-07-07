@@ -75,7 +75,7 @@ def get_chirps_via_gee(
     """
     try:
         import ee
-        from collectors.gee_collector import init_gee, _zonal_stats_ee
+        from gee_collector import init_gee, _zonal_stats_ee
         from utils.geometry import gdf_to_ee_featurecollection
     except ImportError:
         log.error("earthengine-api tidak terinstall. Gunakan get_chirps_via_http() sebagai fallback.")
