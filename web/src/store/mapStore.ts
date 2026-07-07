@@ -3,9 +3,8 @@ import { DEFAULT_BASEMAP, type BasemapId } from "../map/basemaps";
 import { PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
 
 // ── Store peta global (tanpa dependency eksternal) ───────────────────────────
-// Sumber kebenaran tunggal untuk basemap, inset, layer aktif, dan simbologi.
-// Komponen React memakai hook `useMapStore`; MapLibre (imperatif) memakai
-// `subscribe`/`getState`.
+// Sumber kebenaran tunggal untuk basemap, inset, layer aktif, simbologi,
+// table layer, dan hasil analisis intersect.
 
 export type InsetLayerKey = "ndvi" | "lst" | "rain" | "twi" | "evi";
 
@@ -14,7 +13,7 @@ export interface InsetConfig {
   layer: InsetLayerKey;
 }
 
-// ── Simbologi (mirip QGIS/ArcGIS) ────────────────────────────────────────────
+// ── Simbologi ─────────────────────────────────────────────────────────────────
 export interface SymbologyCategory {
   value: string;
   color: string;
@@ -27,20 +26,98 @@ export interface Symbology {
   fillOpacity: number; // 0..1
   stroke: string;
   strokeWidth: number;
-  categoryField?: string; // untuk categorized (mis. "priority_level")
+  categoryField?: string;
   categories: SymbologyCategory[];
+  // Label
+  labelField?: string;
+  labelVisible?: boolean;
+  labelFontSize?: number;  // px
+  labelColor?: string;
 }
 
-export type LayerKind = "blocks" | "gee" | "db";
+// ── Layer Kind ────────────────────────────────────────────────────────────────
+// blocks   = layer utama AOI (singleton, tidak bisa dihapus)
+// reference = layer referensi multi, di-clip ke AOI, untuk analisis diagnostik
+// gee      = raster EO (GEE) — overlay visual saja
+// db       = vektor generik dari DB (tidak punya diagnostic config)
+export type LayerKind = "blocks" | "reference" | "gee" | "db";
 
+// ── Reference Layer: kelas diskrit untuk analisis ─────────────────────────────
+export interface LayerClass {
+  value: string;         // nilai field (mis. "rendah")
+  label: string;         // label tampilan (mis. "NDVI Rendah")
+  color: string;         // warna polygon
+  isProblematic: boolean; // kelas ini = kondisi bermasalah?
+}
+
+export interface ReferenceLayerConfig {
+  diagnosticField: string;   // field yang jadi dasar klasifikasi
+  classes: LayerClass[];     // kelas diskrit (auto-detect dari data atau manual)
+  weight: number;            // 0..1, bobot dalam scoring gabungan
+  periodLabel?: string;      // label periode untuk temporal (mis. "2024-03")
+  periodDate?: string;       // tanggal ISO untuk sorting
+  layerGroup?: string;       // ID grup temporal (semua snapshot layer sama)
+  dbLayerId?: string;        // UUID di vector_layers
+}
+
+// ── Table Layer: data produksi lapangan ──────────────────────────────────────
+export interface TableRow {
+  [key: string]: string | number | null;
+}
+
+export interface TableLayerConfig {
+  id?: string;               // UUID di production_data (jika sudah disimpan)
+  name: string;
+  joinField: string;         // field kunci join ke block_id
+  valueFields: string[];     // kolom produksi yang ditampilkan
+  rows: TableRow[];
+}
+
+// ── Hasil Analisis ────────────────────────────────────────────────────────────
+export interface AnalysisZoneProperties {
+  zone_id: number;
+  block_id: string;
+  ref_layer_id: string;
+  ref_layer_name: string;
+  class_value: string;
+  diagnostic_field: string;
+  is_problematic: boolean;
+  area_ha: number;
+  weight: number;
+}
+
+export interface BlockAnalysisSummary {
+  block_id: string;
+  total_area_ha: number;
+  problematic_ha: number;
+  problematic_pct: number;
+  dominant_diagnosis: string; // "Kritis" | "Peringatan" | "Pantau" | "Normal"
+  zone_count: number;
+  zones: AnalysisZoneProperties[];
+}
+
+export interface AnalysisResult {
+  id?: string;              // UUID setelah disimpan ke DB
+  resultLayerId?: string;   // vector_layer id untuk zona yang disimpan
+  timestamp: string;
+  refLayerIds: string[];
+  blockSummaries: BlockAnalysisSummary[];
+  zonesGeojson: GeoJSON.FeatureCollection;
+  zoneCount: number;
+  saved: boolean;
+}
+
+// ── Active Layer ──────────────────────────────────────────────────────────────
 export interface ActiveLayer {
   id: string;
   name: string;
   kind: LayerKind;
   visible: boolean;
   symbology: Symbology;
-  sourceRef?: string; // id sumber (gee key / vector_layers id)
-  data?: GeoJSON.FeatureCollection; // geometri (untuk layer DB yang di-render)
+  sourceRef?: string;
+  data?: GeoJSON.FeatureCollection;
+  // Reference layer config (hanya untuk kind === "reference")
+  referenceConfig?: ReferenceLayerConfig;
 }
 
 export interface AvailableLayer {
@@ -48,22 +125,34 @@ export interface AvailableLayer {
   name: string;
   group: "gee" | "db";
   sourceRef?: string;
+  // Metadata dari DB
+  layerRole?: string;
+  diagnosticField?: string;
+  periodLabel?: string;
+  layerGroup?: string;
+  layerConfig?: { classes?: LayerClass[]; weight?: number };
 }
 
+// ── Map State ─────────────────────────────────────────────────────────────────
 export interface MapState {
   basemap: BasemapId;
   insetsEnabled: boolean;
-  insets: InsetConfig[]; // maks 3
+  insets: InsetConfig[];
   activeLayers: ActiveLayer[];
   selectedLayerId: string | null;
-  dbLayers: AvailableLayer[]; // layer hasil upload (dari DB)
+  dbLayers: AvailableLayer[];
   leftTab: "layers" | "upload";
-  threeD: boolean; // mode 3D (terrain + ekstrusi)
+  threeD: boolean;
+  // Baru:
+  tableLayer: TableLayerConfig | null;
+  analysisResult: AnalysisResult | null;
+  analysisRunning: boolean;
+  temporalGroupId: string | null;  // layer_group dipilih untuk temporal
 }
 
 const MAX_INSETS = 3;
 
-// Simbologi default blok = kategorikal berdasar priority_level (brand colors).
+// ── Default symbologies ───────────────────────────────────────────────────────
 function defaultBlocksSymbology(): Symbology {
   return {
     mode: "categorized",
@@ -77,35 +166,79 @@ function defaultBlocksSymbology(): Symbology {
       color: PRIORITY_COLOR[k],
       label: PRIORITY_LABEL[k],
     })),
+    labelField: "block_id",
+    labelVisible: true,
+    labelFontSize: 10,
+    labelColor: "#ffffff",
   };
 }
 
-function defaultGeeSymbology(color: string): Symbology {
-  return { mode: "single", fill: color, fillOpacity: 0.55, stroke: "#0F4D3A", strokeWidth: 0.5, categories: [] };
+function defaultReferenceSymbology(classes: LayerClass[]): Symbology {
+  if (classes.length > 0) {
+    return {
+      mode: "categorized",
+      fill: "#23B5C0",
+      fillOpacity: 0.55,
+      stroke: "#0F4D3A",
+      strokeWidth: 0.8,
+      categories: classes.map((c) => ({ value: c.value, color: c.color, label: c.label })),
+      labelVisible: false,
+      labelFontSize: 9,
+      labelColor: "#0E1512",
+    };
+  }
+  return defaultGeeSymbology("#23B5C0");
 }
 
-// Katalog layer GEE yang tersedia (statis; sumber raster/analitik).
+function defaultGeeSymbology(color: string): Symbology {
+  return {
+    mode: "single", fill: color, fillOpacity: 0.55,
+    stroke: "#0F4D3A", strokeWidth: 0.5, categories: [],
+    labelVisible: false, labelFontSize: 9, labelColor: "#0E1512",
+  };
+}
+
+function defaultAnalysisZoneSymbology(): Symbology {
+  return {
+    mode: "categorized",
+    fill: "#C0392B",
+    fillOpacity: 0.6,
+    stroke: "#ffffff",
+    strokeWidth: 0.5,
+    categoryField: "is_problematic",
+    categories: [
+      { value: "true",  color: "#C0392B", label: "Bermasalah" },
+      { value: "false", color: "#16A34A", label: "Normal"     },
+    ],
+    labelVisible: false,
+    labelFontSize: 9,
+    labelColor: "#0E1512",
+  };
+}
+
+// ── Katalog GEE ───────────────────────────────────────────────────────────────
 export const GEE_AVAILABLE: AvailableLayer[] = [
-  { id: "gee-ndvi", name: "NDVI (Sentinel-2)", group: "gee", sourceRef: "ndvi" },
-  { id: "gee-evi", name: "EVI (Sentinel-2)", group: "gee", sourceRef: "evi" },
-  { id: "gee-lst", name: "Land Surface Temp (MODIS)", group: "gee", sourceRef: "lst" },
-  { id: "gee-rain", name: "Rainfall (CHIRPS)", group: "gee", sourceRef: "rain" },
-  { id: "gee-soil", name: "Soil Moisture (SMAP)", group: "gee", sourceRef: "soil_moisture" },
-  { id: "gee-et", name: "Evapotranspiration (MOD16)", group: "gee", sourceRef: "et" },
+  { id: "gee-ndvi",  name: "NDVI (Sentinel-2)",           group: "gee", sourceRef: "ndvi"           },
+  { id: "gee-evi",   name: "EVI (Sentinel-2)",            group: "gee", sourceRef: "evi"            },
+  { id: "gee-lst",   name: "Land Surface Temp (MODIS)",   group: "gee", sourceRef: "lst"            },
+  { id: "gee-rain",  name: "Rainfall (CHIRPS)",           group: "gee", sourceRef: "rain"           },
+  { id: "gee-soil",  name: "Soil Moisture (SMAP)",        group: "gee", sourceRef: "soil_moisture"  },
+  { id: "gee-et",    name: "Evapotranspiration (MOD16)",  group: "gee", sourceRef: "et"             },
 ];
 
 const GEE_COLORS: Record<string, string> = {
-  ndvi:           "#16A34A",  // hijau sehat
-  evi:            "#4D7C0F",  // hijau gelap
-  lst:            "#C0392B",  // merah panas
-  rain:           "#1D6FA4",  // biru hujan
-  soil_moisture:  "#0891b2",  // biru-teal
-  et:             "#6D28D9",  // ungu evapotranspirasi
+  ndvi:          "#16A34A",
+  evi:           "#4D7C0F",
+  lst:           "#C0392B",
+  rain:          "#1D6FA4",
+  soil_moisture: "#0891b2",
+  et:            "#6D28D9",
 };
 
+// ── Initial State ─────────────────────────────────────────────────────────────
 let state: MapState = {
   basemap: DEFAULT_BASEMAP,
-  insetsEnabled: false, // default: peta tampil penuh tanpa inset
+  insetsEnabled: false,
   insets: [
     { id: "inset-1", layer: "ndvi" },
     { id: "inset-2", layer: "rain" },
@@ -123,17 +256,17 @@ let state: MapState = {
   dbLayers: [],
   leftTab: "layers",
   threeD: false,
+  tableLayer: null,
+  analysisResult: null,
+  analysisRunning: false,
+  temporalGroupId: null,
 };
 
 const listeners = new Set<() => void>();
-function emit() {
-  for (const l of listeners) l();
-}
-function set(patch: Partial<MapState>) {
-  state = { ...state, ...patch };
-  emit();
-}
+function emit() { for (const l of listeners) l(); }
+function set(patch: Partial<MapState>) { state = { ...state, ...patch }; emit(); }
 
+// ── Store Actions ─────────────────────────────────────────────────────────────
 export const mapStore = {
   getState: (): MapState => state,
   subscribe: (l: () => void): (() => void) => {
@@ -154,49 +287,111 @@ export const mapStore = {
   },
   removeInset: (id: string) => set({ insets: state.insets.filter((i) => i.id !== id) }),
 
-  // Layer aktif
+  // Layers
   selectLayer: (selectedLayerId: string | null) => set({ selectedLayerId }),
+
   toggleLayerVisible: (id: string) =>
     set({ activeLayers: state.activeLayers.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)) }),
-  removeLayer: (id: string) =>
+
+  removeLayer: (id: string) => {
+    // Block layer tidak bisa dihapus
+    const layer = state.activeLayers.find((l) => l.id === id);
+    if (layer?.kind === "blocks") return;
     set({
       activeLayers: state.activeLayers.filter((l) => l.id !== id),
       selectedLayerId: state.selectedLayerId === id ? null : state.selectedLayerId,
-    }),
-  addAvailableLayer: (a: AvailableLayer) => {
-    // Hindari duplikat.
-    if (state.activeLayers.some((l) => l.sourceRef === a.sourceRef && l.kind !== "blocks")) return;
-    const id = `layer-${a.id}-${Date.now()}`;
-    const kind: LayerKind = a.group === "gee" ? "gee" : "db";
-    const color = a.group === "gee" ? GEE_COLORS[a.sourceRef ?? ""] ?? "#0ea5e9" : "#f59e0b";
-    set({
-      activeLayers: [
-        ...state.activeLayers,
-        { id, name: a.name, kind, visible: true, symbology: defaultGeeSymbology(color), sourceRef: a.sourceRef },
-      ],
-      selectedLayerId: id,
     });
   },
-  addDbLayer: (a: AvailableLayer, geojson: GeoJSON.FeatureCollection) => {
-    if (state.activeLayers.some((l) => l.sourceRef === a.sourceRef && l.kind === "db")) return;
+
+  addAvailableLayer: (a: AvailableLayer) => {
+    if (state.activeLayers.some((l) => l.sourceRef === a.sourceRef && l.kind !== "blocks")) return;
     const id = `layer-${a.id}-${Date.now()}`;
+    const isRef = a.layerRole === "reference";
+    const kind: LayerKind = isRef ? "reference" : (a.group === "gee" ? "gee" : "db");
+    const color = a.group === "gee" ? GEE_COLORS[a.sourceRef ?? ""] ?? "#0ea5e9" : "#23B5C0";
+    const classes = a.layerConfig?.classes ?? [];
+    const refConfig: ReferenceLayerConfig | undefined = isRef ? {
+      diagnosticField: a.diagnosticField ?? "",
+      classes,
+      weight: a.layerConfig?.weight ?? 1.0,
+      periodLabel: a.periodLabel,
+      layerGroup: a.layerGroup,
+      dbLayerId: a.sourceRef,
+    } : undefined;
+
     set({
       activeLayers: [
         ...state.activeLayers,
         {
-          id, name: a.name, kind: "db", visible: true, sourceRef: a.sourceRef,
-          symbology: defaultGeeSymbology("#f59e0b"), data: geojson,
+          id, name: a.name, kind, visible: true,
+          symbology: isRef ? defaultReferenceSymbology(classes) : defaultGeeSymbology(color),
+          sourceRef: a.sourceRef,
+          referenceConfig: refConfig,
         },
       ],
       selectedLayerId: id,
     });
   },
+
+  addDbLayer: (a: AvailableLayer, geojson: GeoJSON.FeatureCollection) => {
+    if (state.activeLayers.some((l) => l.sourceRef === a.sourceRef && l.kind === "db")) return;
+    const id = `layer-${a.id}-${Date.now()}`;
+    const isRef = a.layerRole === "reference";
+    const kind: LayerKind = isRef ? "reference" : "db";
+    const classes = a.layerConfig?.classes ?? [];
+    set({
+      activeLayers: [
+        ...state.activeLayers,
+        {
+          id, name: a.name, kind, visible: true, sourceRef: a.sourceRef,
+          symbology: isRef ? defaultReferenceSymbology(classes) : defaultGeeSymbology("#23B5C0"),
+          data: geojson,
+          referenceConfig: isRef ? {
+            diagnosticField: a.diagnosticField ?? "",
+            classes,
+            weight: a.layerConfig?.weight ?? 1.0,
+            periodLabel: a.periodLabel,
+            layerGroup: a.layerGroup,
+            dbLayerId: a.sourceRef,
+          } : undefined,
+        },
+      ],
+      selectedLayerId: id,
+    });
+  },
+
+  // Tambah layer hasil analisis (zona)
+  addAnalysisZoneLayer: (result: AnalysisResult) => {
+    const id = `layer-analysis-${Date.now()}`;
+    set({
+      activeLayers: [
+        ...state.activeLayers,
+        {
+          id, name: "Zona Analisis", kind: "db", visible: true,
+          symbology: defaultAnalysisZoneSymbology(),
+          data: result.zonesGeojson,
+        },
+      ],
+      selectedLayerId: id,
+    });
+  },
+
   updateSymbology: (id: string, patch: Partial<Symbology>) =>
     set({
       activeLayers: state.activeLayers.map((l) =>
         l.id === id ? { ...l, symbology: { ...l.symbology, ...patch } } : l,
       ),
     }),
+
+  updateReferenceConfig: (id: string, patch: Partial<ReferenceLayerConfig>) =>
+    set({
+      activeLayers: state.activeLayers.map((l) =>
+        l.id === id && l.referenceConfig
+          ? { ...l, referenceConfig: { ...l.referenceConfig, ...patch } }
+          : l,
+      ),
+    }),
+
   reorderLayer: (id: string, dir: -1 | 1) => {
     const arr = [...state.activeLayers];
     const i = arr.findIndex((l) => l.id === id);
@@ -206,8 +401,18 @@ export const mapStore = {
     set({ activeLayers: arr });
   },
 
-  // DB layers (hasil upload)
+  // DB layers
   setDbLayers: (dbLayers: AvailableLayer[]) => set({ dbLayers }),
+
+  // Table Layer
+  setTableLayer: (tableLayer: TableLayerConfig | null) => set({ tableLayer }),
+
+  // Analysis
+  setAnalysisRunning: (analysisRunning: boolean) => set({ analysisRunning }),
+  setAnalysisResult: (analysisResult: AnalysisResult | null) => set({ analysisResult }),
+
+  // Temporal
+  setTemporalGroupId: (temporalGroupId: string | null) => set({ temporalGroupId }),
 
   // Tab panel kiri
   setLeftTab: (leftTab: "layers" | "upload") => set({ leftTab }),
@@ -216,14 +421,17 @@ export const mapStore = {
   setThreeD: (threeD: boolean) => set({ threeD }),
 
   MAX_INSETS,
+
+  // Helpers
+  getBlockLayer: (): ActiveLayer | undefined => state.activeLayers.find((l) => l.kind === "blocks"),
+  getReferenceLayers: (): ActiveLayer[] => state.activeLayers.filter((l) => l.kind === "reference"),
 };
 
-// Hook dev untuk debugging/verifikasi di konsol browser (hanya mode dev).
+// Hook debug (dev only)
 if (import.meta.env.DEV) {
   (window as unknown as { __mapStore?: typeof mapStore }).__mapStore = mapStore;
 }
 
-/** Hook React dengan selektor (kembalikan nilai stabil untuk hindari loop). */
 export function useMapStore<T>(selector: (s: MapState) => T): T {
   return useSyncExternalStore(
     mapStore.subscribe,

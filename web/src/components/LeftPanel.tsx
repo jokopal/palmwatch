@@ -2,24 +2,28 @@ import { useEffect } from "react";
 import LayersTab from "./LayersTab";
 import UploadTab from "./UploadTab";
 import { mapStore, useMapStore, type AvailableLayer } from "../store/mapStore";
-import { listVectorLayers, getVectorLayerGeojson } from "../vectorLayers";
+import { listReferenceLayers } from "../analysisApi";
+import { getVectorLayerGeojson } from "../vectorLayers";
 
 interface Props {
-  // Upload butuh sesi terautentikasi (RLS: insert utk authenticated). Bukan
-  // sekadar role admin — cukup login agar tidak terblokir metadata role.
   canUpload: boolean;
   projectId: string | null;
   onBlocksImported?: () => void;
 }
 
-// Panel kiri bertab: "Layers" (manajemen + simbologi) & "Upload" (SHP/GeoJSON->DB).
+// Panel kiri bertab: "Layers" + "Upload".
+// Muat daftar DB layers termasuk reference layers dengan metadata lengkap.
 export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Props) {
   const tab = useMapStore((s) => s.leftTab);
 
-  // Muat daftar layer DB sekali di awal.
+  // Muat semua layer DB (reference + generic) sekali di awal dan setelah upload
+  const loadDbLayers = () => {
+    listReferenceLayers(projectId ?? undefined).then(mapStore.setDbLayers).catch(() => {});
+  };
+
   useEffect(() => {
-    listVectorLayers().then(mapStore.setDbLayers).catch(() => {});
-  }, []);
+    loadDbLayers();
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddDb = async (a: AvailableLayer) => {
     if (!a.sourceRef) return;
@@ -30,16 +34,19 @@ export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Pr
   return (
     <div className="left-panel">
       <div className="left-tabs">
-        <button className={`left-tab${tab === "layers" ? " active" : ""}`} onClick={() => mapStore.setLeftTab("layers")}>
-          ▤ Layers
+        <button
+          className={`left-tab${tab === "layers" ? " active" : ""}`}
+          onClick={() => mapStore.setLeftTab("layers")}
+        >
+          Layers
         </button>
         <button
           className={`left-tab${tab === "upload" ? " active" : ""}`}
           onClick={() => mapStore.setLeftTab("upload")}
           disabled={!canUpload}
-          title={canUpload ? "Upload layer ke database" : "Login untuk mengupload"}
+          title={canUpload ? "Upload data ke database" : "Login untuk mengupload"}
         >
-          ⭱ Upload
+          Upload
         </button>
       </div>
 
@@ -51,6 +58,7 @@ export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Pr
             onClose={() => mapStore.setLeftTab("layers")}
             projectId={projectId}
             onImported={onBlocksImported}
+            onRefLayersChanged={() => { loadDbLayers(); mapStore.setLeftTab("layers"); }}
           />
         )}
       </div>

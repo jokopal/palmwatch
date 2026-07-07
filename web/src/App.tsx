@@ -12,6 +12,7 @@ import ProfileMenu from "./components/ProfileMenu";
 import ProjectSwitcher from "./components/ProjectSwitcher";
 import SharedView from "./components/SharedView";
 import Login from "./components/Login";
+import AnalysisBar from "./components/AnalysisBar";
 import { api } from "./api";
 import { supabase } from "./supabase";
 import { useMapStore } from "./store/mapStore";
@@ -175,6 +176,9 @@ export default function App() {
           <ProfileMenu session={session} />
         </div>
       </header>
+
+      {/* Analysis toolbar — antara header dan peta */}
+      <AnalysisBar projectId={projectId} />
 
       <div className="body">
         <PanelGroup orientation="horizontal">
