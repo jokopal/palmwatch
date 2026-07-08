@@ -48,7 +48,7 @@ ON public.users FOR SELECT USING (
 -- ==============================================================================
 
 CREATE TABLE IF NOT EXISTS public.assets (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   filename text not null,
   tenant_id text not null,
   uploaded_by uuid references public.users(id),

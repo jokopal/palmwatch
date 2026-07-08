@@ -108,8 +108,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_block_rec     record;
-  v_ref_rec       record;
+  v_rec           record;
   v_block_feature jsonb;
   v_ref_feature   jsonb;
   v_zones         jsonb := '[]'::jsonb;
@@ -127,7 +126,6 @@ declare
   v_problematic_area double precision;
   v_total_area     double precision;
   v_diagnosis      text;
-  v_interventions  text[];
   v_block_summary  jsonb;
   v_zone_id        bigint := 0;
 begin
