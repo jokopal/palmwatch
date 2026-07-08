@@ -1580,3 +1580,7 @@ h1, h2, h3,
 .zone-layer{font-weight:600;flex:1;}
 .zone-class{color:var(--text-muted);}
 .zone-area{font-family:var(--font-data);font-size:10px;color:var(--text-dim);white-space:nowrap;}
+
+/* Legend kind tag */
+.map-legend-kind-tag{display:inline-block;padding:0 4px;border-radius:2px;font-size:8px;font-weight:700;font-family:var(--font-ui);letter-spacing:0.4px;text-transform:uppercase;margin-left:4px;vertical-align:middle;}
+.map-legend-critical{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:var(--critical);color:#fff;font-size:8px;font-weight:900;margin-left:4px;flex-shrink:0;}

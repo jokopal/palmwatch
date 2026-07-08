@@ -2,9 +2,18 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import type { BlockCollection } from "../types";
 import { applyBasemap, baseStyle } from "../map/basemaps";
-import { mapStore, type InsetLayerKey, type Symbology } from "../store/mapStore";
+import { mapStore, type ActiveLayer, type InsetLayerKey, type Symbology } from "../store/mapStore";
 import { fillColorExpr } from "../map/symbology";
 import { rampColorExpr } from "../map/ramps";
+
+// MapView — render engine utama PalmWatch
+// Sumber data:
+//   - "blocks" source: BlockCollection dari API (priority_level, block_id, dll)
+//   - "overlay-<id>" source: setiap ActiveLayer selain blocks (reference, db, analysis zone)
+//
+// Symb engine:
+//   fillColorExpr() untuk single & kategorized (match expression)
+//   Label dari l.symbology.labelField (opsional, toggle via labelVisible)
 
 interface Props {
   data: BlockCollection | null;
@@ -16,11 +25,15 @@ interface Props {
   colorBy?: InsetLayerKey;
 }
 
+// ── Helper: ambil nilai dari store ───────────────────────────────────────────
+function blocksLayer(): ActiveLayer | undefined {
+  return mapStore.getState().activeLayers.find((l) => l.kind === "blocks");
+}
 function blocksSymbology(): Symbology | undefined {
-  return mapStore.getState().activeLayers.find((l) => l.kind === "blocks")?.symbology;
+  return blocksLayer()?.symbology;
 }
 function blocksVisible(): boolean {
-  return mapStore.getState().activeLayers.find((l) => l.kind === "blocks")?.visible ?? true;
+  return blocksLayer()?.visible ?? true;
 }
 
 function fillColor(colorBy?: InsetLayerKey): maplibregl.ExpressionSpecification | string {
@@ -41,6 +54,25 @@ function lineWidth(id: string | null, colorBy?: InsetLayerKey): maplibregl.Expre
   return ["case", ["==", ["get", "block_id"], id ?? ""], 3, w];
 }
 
+// ── Helper: prefix source/layer ID untuk overlay ─────────────────────────────
+const ovSrc  = (id: string) => `ov-src-${id}`;
+const ovFill = (id: string) => `ov-fill-${id}`;
+const ovLine = (id: string) => `ov-line-${id}`;
+const ovLbl  = (id: string) => `ov-lbl-${id}`;
+
+// ── Ekspresi label untuk symbol layer ────────────────────────────────────────
+function labelLayoutExpr(sym: Symbology) {
+  const field = sym.labelField?.trim();
+  if (!field) return { "text-field": "", "text-size": 10 };
+  return {
+    "text-field": ["get", field] as maplibregl.ExpressionSpecification,
+    "text-size": sym.labelFontSize ?? 10,
+    "text-allow-overlap": false,
+    "text-ignore-placement": false,
+    "text-max-width": 8,
+  };
+}
+
 export default function MapView({
   data,
   selectedId = null,
@@ -49,52 +81,140 @@ export default function MapView({
   interactive = true,
   colorBy,
 }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+  const ref     = useRef<HTMLDivElement>(null);
+  const mapRef  = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
 
-  const dataRef = useRef<BlockCollection | null>(data);
-  const selRef = useRef<string | null>(selectedId);
-  const onSelectRef = useRef(onSelect);
-  const colorByRef = useRef(colorBy);
-  dataRef.current = data;
-  selRef.current = selectedId;
+  const dataRef      = useRef<BlockCollection | null>(data);
+  const selRef       = useRef<string | null>(selectedId);
+  const onSelectRef  = useRef(onSelect);
+  const colorByRef   = useRef(colorBy);
+  dataRef.current     = data;
+  selRef.current      = selectedId;
   onSelectRef.current = onSelect;
-  colorByRef.current = colorBy;
+  colorByRef.current  = colorBy;
 
-  // Rekonsiliasi layer DB (GeoJSON hasil upload) ke sumber/layer MapLibre.
-  function syncDbLayers() {
+  // ── syncOverlayLayers ──────────────────────────────────────────────────────
+  // Rekonsiliasi semua non-block layer (reference/db/analysis zone) ke MapLibre.
+  // Dipanggil tiap kali store berubah.
+  function syncOverlayLayers() {
     const map = mapRef.current;
-    if (!map || !loadedRef.current || colorByRef.current) return; // inset dilewati
-    const dbLayers = mapStore.getState().activeLayers.filter((l) => l.kind === "db" && l.data);
-    const wanted = new Set(dbLayers.map((l) => `db-${l.id}`));
+    if (!map || !loadedRef.current || colorByRef.current) return;
 
-    for (const srcId of Object.keys(map.getStyle().sources ?? {})) {
-      if (srcId.startsWith("db-") && !wanted.has(srcId)) {
-        for (const t of ["fill", "line"]) if (map.getLayer(`${srcId}-${t}`)) map.removeLayer(`${srcId}-${t}`);
+    const overlayLayers = mapStore.getState().activeLayers.filter(
+      (l) => l.kind !== "blocks" && l.kind !== "gee" && l.data,
+    );
+    const wantedIds = new Set(overlayLayers.map((l) => l.id));
+
+    // Hapus layer yang tidak lagi ada di store
+    for (const srcId of Object.keys((map.getStyle() as { sources?: Record<string, unknown> }).sources ?? {})) {
+      if (!srcId.startsWith("ov-src-")) continue;
+      const lid = srcId.slice("ov-src-".length);
+      if (!wantedIds.has(lid)) {
+        for (const fn of [ovLbl, ovLine, ovFill]) {
+          if (map.getLayer(fn(lid))) map.removeLayer(fn(lid));
+        }
         if (map.getSource(srcId)) map.removeSource(srcId);
       }
     }
-    for (const l of dbLayers) {
-      const srcId = `db-${l.id}`;
+
+    // Tambah / update overlay layers
+    for (const l of overlayLayers) {
+      const srcId = ovSrc(l.id);
       const s = l.symbology;
-      if (!map.getSource(srcId)) {
-        map.addSource(srcId, { type: "geojson", data: l.data as never });
-        map.addLayer({ id: `${srcId}-fill`, type: "fill", source: srcId, paint: { "fill-color": s.fill, "fill-opacity": s.fillOpacity } });
-        map.addLayer({ id: `${srcId}-line`, type: "line", source: srcId, paint: { "line-color": s.stroke, "line-width": s.strokeWidth } });
-      } else {
-        map.setPaintProperty(`${srcId}-fill`, "fill-color", fillColorExpr(s) as never);
-        map.setPaintProperty(`${srcId}-fill`, "fill-opacity", s.fillOpacity);
-        map.setPaintProperty(`${srcId}-line`, "line-color", s.stroke);
-        map.setPaintProperty(`${srcId}-line`, "line-width", s.strokeWidth);
-      }
       const vis = l.visible ? "visible" : "none";
-      for (const t of ["fill", "line"]) if (map.getLayer(`${srcId}-${t}`)) map.setLayoutProperty(`${srcId}-${t}`, "visibility", vis);
+      const fillExpr = fillColorExpr(s);
+
+      if (!map.getSource(srcId)) {
+        // Tambah source baru
+        map.addSource(srcId, { type: "geojson", data: l.data as GeoJSON.FeatureCollection });
+
+        // Fill layer
+        map.addLayer({
+          id: ovFill(l.id),
+          type: "fill",
+          source: srcId,
+          paint: {
+            "fill-color": fillExpr as maplibregl.ColorSpecification,
+            "fill-opacity": s.fillOpacity,
+          },
+          layout: { visibility: vis },
+        });
+
+        // Stroke layer
+        map.addLayer({
+          id: ovLine(l.id),
+          type: "line",
+          source: srcId,
+          paint: {
+            "line-color": s.stroke,
+            "line-width": s.strokeWidth,
+          },
+          layout: { visibility: vis },
+        });
+
+        // Label layer (opsional)
+        if (s.labelVisible && s.labelField) {
+          map.addLayer({
+            id: ovLbl(l.id),
+            type: "symbol",
+            source: srcId,
+            layout: {
+              ...labelLayoutExpr(s),
+              visibility: vis,
+            } as never,
+            paint: {
+              "text-color": s.labelColor ?? "#ffffff",
+              "text-halo-color": "rgba(0,0,0,0.5)",
+              "text-halo-width": 1,
+            },
+          });
+        }
+
+      } else {
+        // Update source data jika berubah
+        (map.getSource(srcId) as maplibregl.GeoJSONSource).setData(l.data as GeoJSON.FeatureCollection);
+
+        // Update paint properties
+        if (map.getLayer(ovFill(l.id))) {
+          map.setPaintProperty(ovFill(l.id), "fill-color", fillExpr as never);
+          map.setPaintProperty(ovFill(l.id), "fill-opacity", s.fillOpacity);
+          map.setLayoutProperty(ovFill(l.id), "visibility", vis);
+        }
+        if (map.getLayer(ovLine(l.id))) {
+          map.setPaintProperty(ovLine(l.id), "line-color", s.stroke);
+          map.setPaintProperty(ovLine(l.id), "line-width", s.strokeWidth);
+          map.setLayoutProperty(ovLine(l.id), "visibility", vis);
+        }
+
+        // Label: tambah jika baru aktif, hapus jika dimatikan
+        if (s.labelVisible && s.labelField) {
+          if (!map.getLayer(ovLbl(l.id))) {
+            map.addLayer({
+              id: ovLbl(l.id),
+              type: "symbol",
+              source: srcId,
+              layout: { ...labelLayoutExpr(s), visibility: vis } as never,
+              paint: {
+                "text-color": s.labelColor ?? "#ffffff",
+                "text-halo-color": "rgba(0,0,0,0.5)",
+                "text-halo-width": 1,
+              },
+            });
+          } else {
+            map.setLayoutProperty(ovLbl(l.id), "text-field", ["get", s.labelField] as never);
+            map.setLayoutProperty(ovLbl(l.id), "text-size", s.labelFontSize ?? 10);
+            map.setLayoutProperty(ovLbl(l.id), "visibility", vis);
+            map.setPaintProperty(ovLbl(l.id), "text-color", s.labelColor ?? "#ffffff");
+          }
+        } else if (map.getLayer(ovLbl(l.id))) {
+          map.setLayoutProperty(ovLbl(l.id), "visibility", "none");
+        }
+      }
     }
   }
 
-  // Mode 3D: terrain (DEM) + ekstrusi blok (tinggi = severity) + pitch.
-  // Hanya untuk peta utama (bukan inset).
+  // ── Mode 3D ─────────────────────────────────────────────────────────────────
   function apply3D() {
     const map = mapRef.current;
     if (!map || !loadedRef.current || colorByRef.current) return;
@@ -132,7 +252,8 @@ export default function MapView({
     }
   }
 
-  function render() {
+  // ── Render block layer ───────────────────────────────────────────────────────
+  function renderBlocks() {
     const map = mapRef.current;
     const fc = dataRef.current;
     if (!map || !loadedRef.current || !fc) return;
@@ -149,22 +270,36 @@ export default function MapView({
       id: "blocks-fill",
       type: "fill",
       source: "blocks",
-      paint: { "fill-color": fillColor(cb), "fill-opacity": fillOpacity(cb) },
+      paint: { "fill-color": fillColor(cb) as never, "fill-opacity": fillOpacity(cb) },
     });
     map.addLayer({
       id: "blocks-line",
       type: "line",
       source: "blocks",
-      paint: { "line-color": lineColor(selRef.current, cb), "line-width": lineWidth(selRef.current, cb) },
+      paint: { "line-color": lineColor(selRef.current, cb) as never, "line-width": lineWidth(selRef.current, cb) as never },
     });
 
     if (interactive) {
+      const blkSym = blocksSymbology();
+      const labelField = blkSym?.labelField ?? "block_id";
+      const labelVisible = blkSym?.labelVisible !== false; // default true untuk blocks
+
       map.addLayer({
         id: "blocks-label",
         type: "symbol",
         source: "blocks",
-        layout: { "text-field": ["get", "block_id"], "text-size": 11 },
-        paint: { "text-color": "#1f2937", "text-halo-color": "#ffffff", "text-halo-width": 1.2 },
+        layout: {
+          "text-field": ["get", labelField],
+          "text-size": blkSym?.labelFontSize ?? 11,
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          visibility: labelVisible ? "visible" : "none",
+        } as never,
+        paint: {
+          "text-color": blkSym?.labelColor ?? "#ffffff",
+          "text-halo-color": "rgba(0,0,0,0.4)",
+          "text-halo-width": 1.2,
+        },
       });
 
       map.on("click", "blocks-fill", (e) => {
@@ -182,10 +317,11 @@ export default function MapView({
       }
     }
     if (!b.isEmpty() && interactive) map.fitBounds(b, { padding: 60, duration: 0 });
-    apply3D(); // pasang ekstrusi bila 3D sudah aktif saat data masuk
+    apply3D();
+    syncOverlayLayers(); // pasang overlay yang sudah dimuat sebelum data masuk
   }
 
-  // Init map sekali
+  // ── Init map (sekali) ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!ref.current || mapRef.current) return;
     const map = new maplibregl.Map({
@@ -193,15 +329,16 @@ export default function MapView({
       style: baseStyle(mapStore.getState().basemap),
       center: [117.15, -0.535],
       zoom: 11,
-      interactive: interactive,
-      attributionControl: false, // map display bersih (atribusi disembunyikan atas permintaan)
+      interactive,
+      attributionControl: false,
     });
     if (interactive) map.addControl(new maplibregl.NavigationControl({}), "top-left");
     map.on("load", () => {
       loadedRef.current = true;
       if (onMapLoad) onMapLoad(map);
       if (import.meta.env.DEV && interactive) (window as unknown as { __map?: maplibregl.Map }).__map = map;
-      render();
+      renderBlocks();
+      syncOverlayLayers();
     });
     mapRef.current = map;
     return () => {
@@ -209,10 +346,9 @@ export default function MapView({
       mapRef.current = null;
       loadedRef.current = false;
     };
-  }, [interactive]);
+  }, [interactive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resize peta saat kontainer berubah ukuran (fix pane putih saat startup/
-  // tambah inset/resize panel — MapLibre tidak auto-resize).
+  // ── ResizeObserver ───────────────────────────────────────────────────────────
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -221,44 +357,65 @@ export default function MapView({
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    render();
-  }, [data]);
+  // ── Data blok berubah ────────────────────────────────────────────────────────
+  useEffect(() => { renderBlocks(); }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sinkron basemap + simbologi/visibilitas layer blok dari store.
+  // ── Store subscription (basemap + simbologi blok + overlay layers + 3D) ─────
   useEffect(() => {
     let curBasemap = mapStore.getState().basemap;
-    const applySymbology = () => {
+    let cur3D = mapStore.getState().threeD;
+
+    const applyBlocksSymbology = () => {
       const map = mapRef.current;
       if (!map || !loadedRef.current || !map.getLayer("blocks-fill")) return;
       const cb = colorByRef.current;
+      const blkSym = blocksSymbology();
       map.setPaintProperty("blocks-fill", "fill-color", fillColor(cb) as never);
       map.setPaintProperty("blocks-fill", "fill-opacity", fillOpacity(cb));
       map.setPaintProperty("blocks-line", "line-color", lineColor(selRef.current, cb) as never);
       map.setPaintProperty("blocks-line", "line-width", lineWidth(selRef.current, cb) as never);
+
+      // Visibility blocks
       const vis = blocksVisible() ? "visible" : "none";
-      for (const lid of ["blocks-fill", "blocks-line", "blocks-label"]) {
+      for (const lid of ["blocks-fill", "blocks-line"]) {
         if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", vis);
       }
-      if (map.getLayer("blocks-3d")) map.setPaintProperty("blocks-3d", "fill-extrusion-color", fillColor(undefined) as never);
+      // Label blocks
+      if (map.getLayer("blocks-label")) {
+        const lVis = (blkSym?.labelVisible !== false && blocksVisible()) ? "visible" : "none";
+        map.setLayoutProperty("blocks-label", "visibility", lVis);
+        if (blkSym?.labelField) {
+          map.setLayoutProperty("blocks-label", "text-field", ["get", blkSym.labelField] as never);
+          map.setLayoutProperty("blocks-label", "text-size", blkSym.labelFontSize ?? 11);
+          map.setPaintProperty("blocks-label", "text-color", blkSym.labelColor ?? "#ffffff");
+        }
+      }
+      // 3D extrusion color
+      if (map.getLayer("blocks-3d")) {
+        map.setPaintProperty("blocks-3d", "fill-extrusion-color", fillColor(undefined) as never);
+      }
     };
-    let cur3D = mapStore.getState().threeD;
+
     const unsub = mapStore.subscribe(() => {
       const map = mapRef.current;
+      // Basemap
       const next = mapStore.getState().basemap;
       if (next !== curBasemap) {
         curBasemap = next;
         if (map && loadedRef.current) applyBasemap(map, next);
       }
-      applySymbology();
-      syncDbLayers();
+      // Blocks symbology
+      applyBlocksSymbology();
+      // Overlay layers (reference/db/analysis)
+      syncOverlayLayers();
+      // 3D toggle
       const n3d = mapStore.getState().threeD;
       if (n3d !== cur3D) { cur3D = n3d; apply3D(); }
     });
     return unsub;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Highlight seleksi.
+  // ── Selection highlight ──────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loadedRef.current || !map.getLayer("blocks-line")) return;
