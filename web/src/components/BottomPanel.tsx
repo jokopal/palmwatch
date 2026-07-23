@@ -246,7 +246,7 @@ function TemporalTab() {
   }, [chartData]);
 
   const classPalette = [
-    "#C0392B", "#D97706", "#16A34A", "#0891b2",
+    "#C0392B", "#D97706", "#5FA83F", "#0891b2",
     "#6D28D9", "#DB2777", "#059669",
   ];
 

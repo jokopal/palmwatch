@@ -156,7 +156,7 @@ const MAX_INSETS = 3;
 function defaultBlocksSymbology(): Symbology {
   return {
     mode: "categorized",
-    fill: "#0F4D3A",
+    fill: "#1D4E2C",
     fillOpacity: 0.65,
     stroke: "#ffffff",
     strokeWidth: 1,
@@ -177,24 +177,24 @@ function defaultReferenceSymbology(classes: LayerClass[]): Symbology {
   if (classes.length > 0) {
     return {
       mode: "categorized",
-      fill: "#23B5C0",
+      fill: "#5FA83F",
       fillOpacity: 0.55,
-      stroke: "#0F4D3A",
+      stroke: "#1D4E2C",
       strokeWidth: 0.8,
       categories: classes.map((c) => ({ value: c.value, color: c.color, label: c.label })),
       labelVisible: false,
       labelFontSize: 9,
-      labelColor: "#0E1512",
+      labelColor: "#14361F",
     };
   }
-  return defaultGeeSymbology("#23B5C0");
+  return defaultGeeSymbology("#5FA83F");
 }
 
 function defaultGeeSymbology(color: string): Symbology {
   return {
     mode: "single", fill: color, fillOpacity: 0.55,
-    stroke: "#0F4D3A", strokeWidth: 0.5, categories: [],
-    labelVisible: false, labelFontSize: 9, labelColor: "#0E1512",
+    stroke: "#1D4E2C", strokeWidth: 0.5, categories: [],
+    labelVisible: false, labelFontSize: 9, labelColor: "#14361F",
   };
 }
 
@@ -208,11 +208,11 @@ function defaultAnalysisZoneSymbology(): Symbology {
     categoryField: "is_problematic",
     categories: [
       { value: "true",  color: "#C0392B", label: "Bermasalah" },
-      { value: "false", color: "#16A34A", label: "Normal"     },
+      { value: "false", color: "#5FA83F", label: "Normal"     },
     ],
     labelVisible: false,
     labelFontSize: 9,
-    labelColor: "#0E1512",
+    labelColor: "#14361F",
   };
 }
 
@@ -227,7 +227,7 @@ export const GEE_AVAILABLE: AvailableLayer[] = [
 ];
 
 const GEE_COLORS: Record<string, string> = {
-  ndvi:          "#16A34A",
+  ndvi:          "#5FA83F",
   evi:           "#4D7C0F",
   lst:           "#C0392B",
   rain:          "#1D6FA4",
@@ -308,7 +308,7 @@ export const mapStore = {
     const id = `layer-${a.id}-${Date.now()}`;
     const isRef = a.layerRole === "reference";
     const kind: LayerKind = isRef ? "reference" : (a.group === "gee" ? "gee" : "db");
-    const color = a.group === "gee" ? GEE_COLORS[a.sourceRef ?? ""] ?? "#0ea5e9" : "#23B5C0";
+    const color = a.group === "gee" ? GEE_COLORS[a.sourceRef ?? ""] ?? "#0ea5e9" : "#5FA83F";
     const classes = a.layerConfig?.classes ?? [];
     const refConfig: ReferenceLayerConfig | undefined = isRef ? {
       diagnosticField: a.diagnosticField ?? "",
@@ -344,7 +344,7 @@ export const mapStore = {
         ...state.activeLayers,
         {
           id, name: a.name, kind, visible: true, sourceRef: a.sourceRef,
-          symbology: isRef ? defaultReferenceSymbology(classes) : defaultGeeSymbology("#23B5C0"),
+          symbology: isRef ? defaultReferenceSymbology(classes) : defaultGeeSymbology("#5FA83F"),
           data: geojson,
           referenceConfig: isRef ? {
             diagnosticField: a.diagnosticField ?? "",

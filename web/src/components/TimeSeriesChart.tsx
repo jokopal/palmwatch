@@ -39,7 +39,7 @@ export default function TimeSeriesChart({ series }: Props) {
         />
         <Legend wrapperStyle={{ fontSize: 10 }} />
         <Bar yAxisId="r" dataKey="Hujan" fill="#1e40af" opacity={0.45} barSize={6} />
-        <Line yAxisId="l" type="monotone" dataKey="NDVI" stroke="#2ea043" dot={false} strokeWidth={2} />
+        <Line yAxisId="l" type="monotone" dataKey="NDVI" stroke="#5FA83F" dot={false} strokeWidth={2} />
         <Line yAxisId="l" type="monotone" dataKey="TBS" stroke="#f59e0b" dot={false} strokeWidth={2} />
       </ComposedChart>
     </ResponsiveContainer>

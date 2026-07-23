@@ -48,7 +48,7 @@ export const PRIORITY_COLOR: Record<string, string> = {
   critical: "#C0392B",   // merah dalam - kondisi kritis
   warning:  "#D97706",   // amber profesional - peringatan
   monitor:  "#CA8A04",   // kuning-gelap - pantau
-  normal:   "#16A34A",   // hijau sehat - optimal
+  normal:   "#5FA83F",   // Canopy Green (Direction B) - sehat/optimal
 };
 
 export const PRIORITY_LABEL: Record<string, string> = {

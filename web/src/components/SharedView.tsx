@@ -31,8 +31,8 @@ export default function SharedView({ token }: { token: string }) {
         <div className="brand">
           <b>
             <svg width="16" height="16" viewBox="0 0 56 56" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
-              <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#23B5C0" strokeWidth="3" fill="none"/>
-              <circle cx="28" cy="28" r="5" fill="#23B5C0"/>
+              <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#9BCB4F" strokeWidth="3" fill="none"/>
+              <circle cx="28" cy="28" r="5" fill="#9BCB4F"/>
               <circle cx="28" cy="28" r="2" fill="#fff"/>
             </svg>
             PalmWatch

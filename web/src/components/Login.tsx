@@ -7,14 +7,14 @@ function HexLogo({ size = 48 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 56 56" fill="none" aria-hidden="true">
       <polygon
         points="28,4 50,16 50,40 28,52 6,40 6,16"
-        stroke="#23B5C0"
+        stroke="#9BCB4F"
         strokeWidth="2.5"
         fill="none"
       />
-      <line x1="28" y1="4"  x2="28" y2="52" stroke="#23B5C0" strokeWidth="1" strokeOpacity="0.35" />
-      <line x1="6"  y1="16" x2="50" y2="40" stroke="#23B5C0" strokeWidth="1" strokeOpacity="0.35" />
-      <line x1="50" y1="16" x2="6"  y2="40" stroke="#23B5C0" strokeWidth="1" strokeOpacity="0.35" />
-      <circle cx="28" cy="28" r="4.5" fill="#23B5C0" />
+      <line x1="28" y1="4"  x2="28" y2="52" stroke="#9BCB4F" strokeWidth="1" strokeOpacity="0.35" />
+      <line x1="6"  y1="16" x2="50" y2="40" stroke="#9BCB4F" strokeWidth="1" strokeOpacity="0.35" />
+      <line x1="50" y1="16" x2="6"  y2="40" stroke="#9BCB4F" strokeWidth="1" strokeOpacity="0.35" />
+      <circle cx="28" cy="28" r="4.5" fill="#9BCB4F" />
       <circle cx="28" cy="28" r="2"   fill="#ffffff" />
     </svg>
   );
@@ -50,7 +50,7 @@ export default function Login() {
       {/* ── Left hero panel ──────────────────────────────────────── */}
       <div style={{
         flex: "0 0 420px",
-        background: "linear-gradient(160deg, var(--color-teal-dark) 0%, var(--color-teal) 60%, #1A7A5E 100%)",
+        background: "linear-gradient(160deg, var(--color-teal-dark) 0%, var(--color-teal) 60%, var(--color-teal-mid) 100%)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",

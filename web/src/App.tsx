@@ -102,8 +102,8 @@ export default function App() {
         gap: '20px',
       }}>
         <svg width="44" height="44" viewBox="0 0 56 56" fill="none">
-          <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#23B5C0" strokeWidth="2.5" fill="none" opacity="0.9"/>
-          <circle cx="28" cy="28" r="4.5" fill="#23B5C0"/>
+          <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#9BCB4F" strokeWidth="2.5" fill="none" opacity="0.9"/>
+          <circle cx="28" cy="28" r="4.5" fill="#9BCB4F"/>
           <circle cx="28" cy="28" r="2" fill="#fff"/>
         </svg>
         <div style={{ fontFamily: 'var(--font-display)', color: '#fff', fontSize: '16px', fontWeight: 600, letterSpacing: '0.3px' }}>PalmWatch</div>
@@ -125,8 +125,8 @@ export default function App() {
         <div className="brand">
           <b>
             <svg width="18" height="18" viewBox="0 0 56 56" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
-              <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#23B5C0" strokeWidth="3" fill="none"/>
-              <circle cx="28" cy="28" r="5" fill="#23B5C0"/>
+              <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" stroke="#9BCB4F" strokeWidth="3" fill="none"/>
+              <circle cx="28" cy="28" r="5" fill="#9BCB4F"/>
               <circle cx="28" cy="28" r="2" fill="#fff"/>
             </svg>
             PalmWatch

@@ -39,7 +39,7 @@ function blocksVisible(): boolean {
 function fillColor(colorBy?: InsetLayerKey): maplibregl.ExpressionSpecification | string {
   if (colorBy) return rampColorExpr(colorBy);
   const sym = blocksSymbology();
-  return sym ? fillColorExpr(sym) : "#3b82f6";
+  return sym ? fillColorExpr(sym) : "#5FA83F";
 }
 function fillOpacity(colorBy?: InsetLayerKey): number {
   if (colorBy) return 0.75;
@@ -47,7 +47,7 @@ function fillOpacity(colorBy?: InsetLayerKey): number {
 }
 function lineColor(id: string | null, colorBy?: InsetLayerKey): maplibregl.ExpressionSpecification {
   const stroke = colorBy ? "#ffffff" : blocksSymbology()?.stroke ?? "#ffffff";
-  return ["case", ["==", ["get", "block_id"], id ?? ""], "#2563eb", stroke];
+  return ["case", ["==", ["get", "block_id"], id ?? ""], "#9BCB4F", stroke];
 }
 function lineWidth(id: string | null, colorBy?: InsetLayerKey): maplibregl.ExpressionSpecification {
   const w = colorBy ? 0.5 : blocksSymbology()?.strokeWidth ?? 1;

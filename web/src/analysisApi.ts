@@ -321,7 +321,7 @@ export function detectClasses(
 
   // Palet warna default per kelas (max 10)
   const palette = [
-    "#C0392B", "#D97706", "#CA8A04", "#16A34A",
+    "#C0392B", "#D97706", "#CA8A04", "#5FA83F",
     "#0891b2", "#6D28D9", "#DB2777", "#059669",
     "#7C3AED", "#2563EB",
   ];

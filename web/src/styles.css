@@ -8,29 +8,33 @@
    1. DESIGN TOKENS (semua nilai dikontrol dari sini)
    ───────────────────────────────────────────────────────────────── */
 :root {
-  /* ── BRAND COLORS (Pranata Bhumi Palette) ─────────────────────── */
-  --color-forest:     #0E1512;   /* Forest Black — text utama, dark bg */
-  --color-teal:       #0F4D3A;   /* Deep Teal — brand primary */
-  --color-teal-dark:  #0A3828;   /* Deep Teal gelap — header bg */
-  --color-teal-mid:   #1A6B52;   /* Teal midtone — hover/active state */
-  --color-teal-light: #E8F5EF;   /* Teal sangat terang — bg highlight */
-  --color-cyan:       #23B5C0;   /* Precision Cyan — accent/CTA/interactive */
-  --color-cyan-dim:   #1A8A93;   /* Cyan gelap — hover */
-  --color-cyan-light: #E0F6F8;   /* Cyan terang — bg accent subtle */
-  --color-stone:      #9AA8A0;   /* Stone Grey — muted text, border */
-  --color-fog:        #F4F6F3;   /* Fog White — background utama */
-  --color-fog-dark:   #E8ECE9;   /* Background alternatif */
+  /* ── BRAND COLORS — Direction B "Kanopi" ──────────────────────────
+     Palet inti: #14361F · #5FA83F · #9BCB4F · #8A5A34 · #F1F5EC
+     (logogram tetap Direction A "Presisi": heksagon + titik survei) */
+  --color-forest:     #14361F;   /* Deep Forest — text utama, dark bg */
+  --color-teal:       #1D4E2C;   /* Forest mid — brand primary */
+  --color-teal-dark:  #14361F;   /* Deep Forest — header bg */
+  --color-teal-mid:   #2A6B3D;   /* Forest terang — hover/active state */
+  --color-teal-light: #E3EFD9;   /* Hijau sangat terang — bg highlight */
+  --color-cyan:       #5FA83F;   /* Canopy Green — accent/CTA/interactive */
+  --color-cyan-dim:   #4C8A32;   /* Canopy gelap — hover */
+  --color-cyan-light: #EAF4E0;   /* Canopy terang — bg accent subtle */
+  --color-lime:       #9BCB4F;   /* Leaf Lime — highlight, aksen di bg gelap */
+  --color-earth:      #8A5A34;   /* Earth Brown — aksen tanah/bumi */
+  --color-stone:      #8B9A88;   /* Stone Green-Grey — muted text, border */
+  --color-fog:        #F1F5EC;   /* Canopy White — background utama */
+  --color-fog-dark:   #E4EBDD;   /* Background alternatif */
 
   /* ── SEMANTIC COLOR ALIASES ──────────────────────────────────── */
   --bg:              var(--color-fog);
   --bg-alt:          var(--color-fog-dark);
   --surface:         #ffffff;
-  --surface-2:       #F8FAF8;    /* panel inset, zebra row alt */
-  --surface-3:       #EFF3F0;    /* active/selected state bg */
-  --border:          #D4DDD8;
-  --border-subtle:   #E5EDE8;
+  --surface-2:       #F7FAF4;    /* panel inset, zebra row alt */
+  --surface-3:       #ECF2E5;    /* active/selected state bg */
+  --border:          #D6E0CC;
+  --border-subtle:   #E4EDDA;
   --text:            var(--color-forest);
-  --text-dim:        #4A5E55;    /* secondary text */
+  --text-dim:        #475A45;    /* secondary text */
   --text-muted:      var(--color-stone);
   --accent:          var(--color-cyan);
   --accent-hover:    var(--color-cyan-dim);
@@ -47,8 +51,8 @@
   --warning-bg:      #FEF3C7;
   --monitor:         #CA8A04;
   --monitor-bg:      #FEF9C3;
-  --normal:          #16A34A;
-  --normal-bg:       #DCFCE7;
+  --normal:          var(--color-cyan);   /* Canopy Green — sehat/optimal */
+  --normal-bg:       #E6F2DC;
 
   /* ── TYPOGRAPHY (Pranata Bhumi 3-font system) ─────────────────── */
   /* Space Grotesk = logotype, heading, brand identity */
@@ -810,7 +814,7 @@ h1, h2, h3,
 .profile-avatar {
   width: 32px; height: 32px;
   border-radius: var(--r-pill);
-  border: 2px solid rgba(35, 181, 192, 0.5);
+  border: 2px solid rgba(95, 168, 63, 0.5);
   background: linear-gradient(135deg, var(--color-teal-mid), var(--color-cyan));
   color: #fff;
   font-family: var(--font-display);
@@ -824,7 +828,7 @@ h1, h2, h3,
 }
 .profile-avatar:hover {
   border-color: var(--color-cyan);
-  box-shadow: 0 0 0 3px rgba(35, 181, 192, 0.25);
+  box-shadow: 0 0 0 3px rgba(95, 168, 63, 0.25);
 }
 .profile-avatar.lg {
   width: 40px; height: 40px;
@@ -1476,12 +1480,12 @@ h1, h2, h3,
 }
 
 /* === 19. ANALYSIS BAR === */
-.analysis-bar{display:flex;align-items:center;gap:var(--sp-3);padding:5px var(--sp-4);background:var(--color-forest);border-bottom:1px solid rgba(35,181,192,0.2);font-family:var(--font-ui);font-size:var(--text-xs);flex-shrink:0;flex-wrap:wrap;min-height:36px;color:rgba(255,255,255,0.7);}
+.analysis-bar{display:flex;align-items:center;gap:var(--sp-3);padding:5px var(--sp-4);background:var(--color-forest);border-bottom:1px solid rgba(95, 168, 63,0.2);font-family:var(--font-ui);font-size:var(--text-xs);flex-shrink:0;flex-wrap:wrap;min-height:36px;color:rgba(255,255,255,0.7);}
 .ab-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 5px currentColor;}
 .ab-status{display:flex;align-items:center;gap:var(--sp-2);flex:1;flex-wrap:wrap;overflow:hidden;}
 .ab-block b,.ab-refs b,.ab-table b{color:#fff;}
 .ab-sep{color:rgba(255,255,255,0.2);}
-.ab-ref-chip{display:inline-block;background:rgba(35,181,192,0.18);border:1px solid rgba(35,181,192,0.35);border-radius:var(--r-pill);padding:1px 7px;color:var(--color-cyan);margin-left:3px;white-space:nowrap;}
+.ab-ref-chip{display:inline-block;background:rgba(95, 168, 63,0.18);border:1px solid rgba(95, 168, 63,0.35);border-radius:var(--r-pill);padding:1px 7px;color:var(--color-cyan);margin-left:3px;white-space:nowrap;}
 .ab-issues{background:rgba(192,57,43,0.25);color:#f5a09a;border-radius:var(--r-pill);padding:1px 8px;cursor:help;}
 .ab-actions{display:flex;align-items:center;gap:var(--sp-2);flex-shrink:0;}
 .ab-run-btn{padding:5px 16px;border-radius:var(--r-md);background:var(--color-cyan);color:var(--color-forest);font-family:var(--font-ui);font-size:var(--text-xs);font-weight:700;border:none;cursor:pointer;letter-spacing:0.3px;transition:background var(--t-fast),opacity var(--t-fast);white-space:nowrap;}
@@ -1502,13 +1506,13 @@ h1, h2, h3,
 
 /* === 20. LAYER KIND BADGES === */
 .lp-kind-badge{display:inline-block;padding:1px 6px;border-radius:var(--r-pill);font-size:9px;font-weight:700;font-family:var(--font-ui);letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;}
-.lk-blocks{background:rgba(15,77,58,0.25);color:#4ade80;border:1px solid rgba(74,222,128,0.3);}
-.lk-reference{background:rgba(35,181,192,0.18);color:var(--color-cyan);border:1px solid rgba(35,181,192,0.35);}
+.lk-blocks{background:rgba(20, 54, 31,0.25);color:#9BCB4F;border:1px solid rgba(155, 203, 79,0.3);}
+.lk-reference{background:rgba(95, 168, 63,0.18);color:var(--color-cyan);border:1px solid rgba(95, 168, 63,0.35);}
 .lk-gee{background:rgba(109,40,217,0.15);color:#c084fc;border:1px solid rgba(192,132,252,0.3);}
 .lk-db{background:rgba(245,158,11,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);}
 .lk-table{background:rgba(29,111,164,0.18);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);}
 .layer-kind-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
-.layer-kind-dot.lk-blocks{background:#4ade80;}
+.layer-kind-dot.lk-blocks{background:#9BCB4F;}
 .layer-kind-dot.lk-reference{background:var(--color-cyan);}
 .layer-kind-dot.lk-gee{background:#c084fc;}
 .layer-kind-dot.lk-db{background:#fbbf24;}
@@ -1516,7 +1520,7 @@ h1, h2, h3,
 /* === 21. LAYERS TAB === */
 .layer-list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-2);}
 .layer-count{background:var(--surface-3);border-radius:var(--r-pill);padding:1px 7px;font-size:var(--text-xs);font-family:var(--font-data);color:var(--text-muted);}
-.analysis-ready-hint{background:rgba(35,181,192,0.08);border:1px solid rgba(35,181,192,0.2);border-radius:var(--r-sm);padding:var(--sp-2) var(--sp-3);font-size:var(--text-xs);color:var(--color-cyan);margin-bottom:var(--sp-3);}
+.analysis-ready-hint{background:rgba(95, 168, 63,0.08);border:1px solid rgba(95, 168, 63,0.2);border-radius:var(--r-sm);padding:var(--sp-2) var(--sp-3);font-size:var(--text-xs);color:var(--color-cyan);margin-bottom:var(--sp-3);}
 .analysis-not-ready-hint{background:var(--surface-2);border-radius:var(--r-sm);padding:var(--sp-2) var(--sp-3);font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--sp-3);}
 .active-layer-info{display:flex;align-items:center;gap:var(--sp-1);flex:1;min-width:0;overflow:hidden;}
 .active-layer-name{font-size:var(--text-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
@@ -1533,8 +1537,8 @@ h1, h2, h3,
 .lp-text-input{padding:3px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2);color:var(--text);font-size:var(--text-xs);font-family:var(--font-ui);flex:1;}
 .lp-text-input.sm{width:70px;flex:none;}
 .lp-text-input:focus{outline:none;border-color:var(--color-cyan);}
-.lp-detect-btn{padding:3px 8px;background:rgba(35,181,192,0.15);border:1px solid rgba(35,181,192,0.3);border-radius:var(--r-sm);color:var(--color-cyan);font-size:var(--text-xs);cursor:pointer;transition:background var(--t-fast);}
-.lp-detect-btn:hover:not(:disabled){background:rgba(35,181,192,0.25);}
+.lp-detect-btn{padding:3px 8px;background:rgba(95, 168, 63,0.15);border:1px solid rgba(95, 168, 63,0.3);border-radius:var(--r-sm);color:var(--color-cyan);font-size:var(--text-xs);cursor:pointer;transition:background var(--t-fast);}
+.lp-detect-btn:hover:not(:disabled){background:rgba(95, 168, 63,0.25);}
 .lp-detect-btn:disabled{opacity:0.4;cursor:not-allowed;}
 .lp-class-header{display:flex;align-items:center;justify-content:space-between;margin:var(--sp-3) 0 var(--sp-2);}
 .lp-class-empty{font-size:var(--text-xs);color:var(--text-muted);text-align:center;padding:var(--sp-3);background:var(--surface-2);border-radius:var(--r-sm);}
@@ -1566,7 +1570,7 @@ h1, h2, h3,
 .concl-block-list{display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:100%;padding:var(--sp-3) var(--sp-4);}
 .concl-block-card{padding:var(--sp-2) var(--sp-3);background:var(--surface-2);border-radius:var(--r-sm);border:1px solid var(--border-subtle);cursor:pointer;transition:border-color var(--t-fast),background var(--t-fast);}
 .concl-block-card:hover{border-color:var(--border);background:var(--surface-3);}
-.concl-block-card.selected{border-color:var(--color-cyan);background:rgba(35,181,192,0.06);}
+.concl-block-card.selected{border-color:var(--color-cyan);background:rgba(95, 168, 63,0.06);}
 .cbc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
 .cbc-id{font-family:var(--font-data);font-size:var(--text-sm);font-weight:600;}
 .cbc-diag{font-size:var(--text-xs);}
