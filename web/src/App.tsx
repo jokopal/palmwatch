@@ -17,6 +17,7 @@ import { api } from "./api";
 import { supabase } from "./supabase";
 import { useMapStore } from "./store/mapStore";
 import { listProjects, type Project } from "./projects";
+import { AuthProvider, fetchMyRole } from "./auth";
 import type { BlockCollection, Summary } from "./types";
 
 // Deteksi mode share publik (?share=<token>) sekali di awal.
@@ -63,6 +64,18 @@ export default function App() {
 
   const previewBypass = Boolean(import.meta.env.VITE_PREVIEW_NO_AUTH);
   const authed = !authChecking && Boolean(session || !supabase || previewBypass);
+
+  // Role (Fase 2 RBAC) — dari public.users; di preview via VITE_PREVIEW_ROLE.
+  const [role, setRole] = useState<"admin" | "user">("user");
+  const isAdmin = role === "admin";
+  useEffect(() => {
+    if (!authed) return;
+    if (previewBypass) {
+      setRole(import.meta.env.VITE_PREVIEW_ROLE === "user" ? "user" : "admin");
+    } else {
+      fetchMyRole().then(setRole).catch(() => setRole("user"));
+    }
+  }, [authed, session, previewBypass]);
 
   const reloadProjects = () => {
     listProjects().then((ps) => {
@@ -120,6 +133,7 @@ export default function App() {
   }
 
   return (
+    <AuthProvider value={{ isAdmin, role }}>
     <div className="app">
       <header className="header">
         <div className="brand">
@@ -137,7 +151,7 @@ export default function App() {
         <ProjectSwitcher
           projects={projects}
           currentId={projectId}
-          canManage={Boolean(session)}
+          canManage={isAdmin}
           onSwitch={setProjectId}
           onProjectsChanged={reloadProjects}
         />
@@ -177,8 +191,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Analysis toolbar — antara header dan peta */}
-      <AnalysisBar projectId={projectId} />
+      {/* Analysis toolbar — admin only (menulis hasil ke DB) */}
+      {isAdmin && <AnalysisBar projectId={projectId} />}
 
       <div className="body">
         <PanelGroup orientation="horizontal">
@@ -255,7 +269,7 @@ export default function App() {
           {/* Right Area (Layer workspace panel) */}
           <Panel defaultSize={25} minSize={0} collapsible={true}>
             <LeftPanel
-              canUpload={!!session}
+              canUpload={isAdmin}
               projectId={projectId}
               onBlocksImported={() => { reloadProjects(); reloadData(); }}
             />
@@ -264,5 +278,6 @@ export default function App() {
         </PanelGroup>
       </div>
     </div>
+    </AuthProvider>
   );
 }

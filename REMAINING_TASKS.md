@@ -21,7 +21,10 @@
     `blocks_geojson`/`block_summary`/`block_timeseries`/`list_projects` member-scoped; RLS
     blocks/vector_layers/projects (write admin, read member); revoke anon; share publik
     dipertahankan via helper `_blocks_fc`/`_block_summary` (enforce flag); user→Demo.
-  - Fase 2: `useAuth()` role context; user = read-only UI.
+  - ✅ **Fase 2 SELESAI** (verified 2 role via preview): `web/src/auth.tsx` (context
+    `useIsAdmin`/`useAuth` + `fetchMyRole` dari public.users). User = read-only:
+    disembunyikan ✎ simbologi, add/hapus/reorder layer, Available Layers, Run Analysis,
+    Upload tab, project new/share. Tetap bisa: lihat layer, toggle visibility, basemap/3D/inset.
   - Fase 3: shell kondisional admin console vs user viewer + menu Input (stub).
   - Fase 4: manajemen user (assign akses project) + Edge Function buat/hapus user.
   - Fase 5: verifikasi admin vs user.

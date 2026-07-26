@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY?: string;
   readonly VITE_USERNAME_EMAIL_DOMAIN?: string;
   readonly VITE_PREVIEW_NO_AUTH?: string;
+  readonly VITE_PREVIEW_ROLE?: string;
 }
 
 interface ImportMeta {

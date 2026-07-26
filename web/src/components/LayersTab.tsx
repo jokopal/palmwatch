@@ -4,6 +4,7 @@ import {
   type AvailableLayer, type ActiveLayer,
 } from "../store/mapStore";
 import LayerPropertiesPanel from "./LayerPropertiesPanel";
+import { useIsAdmin } from "../auth";
 
 interface Props {
   onAddDb: (a: AvailableLayer) => void;
@@ -23,6 +24,7 @@ export default function LayersTab({ onAddDb }: Props) {
   const activeLayers = useMapStore((s) => s.activeLayers);
   const dbLayers     = useMapStore((s) => s.dbLayers);
   const tableLayer   = useMapStore((s) => s.tableLayer);
+  const isAdmin      = useIsAdmin();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const activeRefs = new Set(activeLayers.map((l) => l.sourceRef));
@@ -47,8 +49,8 @@ export default function LayersTab({ onAddDb }: Props) {
           <span className="layer-count">{activeLayers.length}</span>
         </div>
 
-        {/* Analysis readiness indicator */}
-        {analysisAvailable ? (
+        {/* Analysis readiness indicator (admin only) */}
+        {isAdmin && (analysisAvailable ? (
           <div className="analysis-ready-hint">
             {refLayers.length} reference layer siap. Klik <b>Run Analysis</b> di toolbar atas.
           </div>
@@ -56,7 +58,7 @@ export default function LayersTab({ onAddDb }: Props) {
           <div className="analysis-not-ready-hint">
             Tambah Reference Layer untuk mengaktifkan analisis intersect.
           </div>
-        )}
+        ))}
 
         <ul className="active-layer-list">
           {activeLayers.map((l, idx) => (
@@ -79,15 +81,18 @@ export default function LayersTab({ onAddDb }: Props) {
             <span className="table-layer-meta">
               {tableLayer.rows.length} baris · join: {tableLayer.joinField}
             </span>
-            <button className="layer-remove-btn"
-              onClick={() => mapStore.setTableLayer(null)} title="Hapus table layer">
-              x
-            </button>
+            {isAdmin && (
+              <button className="layer-remove-btn"
+                onClick={() => mapStore.setTableLayer(null)} title="Hapus table layer">
+                x
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── AVAILABLE LAYERS ──────────────────────────────────── */}
+      {/* ── AVAILABLE LAYERS (admin only — user = read-only) ──── */}
+      {isAdmin && (
       <div className="sidebar-section" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         <h3 className="sidebar-title">Available Layers</h3>
 
@@ -140,6 +145,7 @@ export default function LayersTab({ onAddDb }: Props) {
           </ul>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -155,6 +161,7 @@ function LayerItem({
   onToggleEdit: (id: string) => void;
 }) {
   const isBlock = layer.kind === "blocks";
+  const isAdmin = useIsAdmin();
 
   return (
     <li className="active-layer-item">
@@ -181,50 +188,32 @@ function LayerItem({
           )}
         </div>
 
-        {/* Actions */}
-        <span className="layer-actions">
-          <button
-            className={`layer-edit${isEditing ? " on" : ""}`}
-            onClick={() => onToggleEdit(layer.id)}
-            title="Edit properti layer"
-          >
-            ✎
-          </button>
-          {!isBlock && (
-            <>
-              <button
-                disabled={idx <= 1}
-                onClick={() => mapStore.reorderLayer(layer.id, -1)}
-                title="Naikkan urutan"
-              >
-                up
-              </button>
-              <button
-                disabled={idx >= total - 1}
-                onClick={() => mapStore.reorderLayer(layer.id, 1)}
-                title="Turunkan urutan"
-              >
-                dn
-              </button>
-              <button
-                className="layer-remove-btn"
-                onClick={() => {
-                  mapStore.removeLayer(layer.id);
-                }}
-                title="Hapus layer"
-              >
-                x
-              </button>
-            </>
-          )}
-          {isBlock && (
-            <span className="layer-protected" title="Block layer tidak bisa dihapus">lock</span>
-          )}
-        </span>
+        {/* Actions — hanya admin (user = read-only) */}
+        {isAdmin && (
+          <span className="layer-actions">
+            <button
+              className={`layer-edit${isEditing ? " on" : ""}`}
+              onClick={() => onToggleEdit(layer.id)}
+              title="Edit properti layer"
+            >
+              ✎
+            </button>
+            {!isBlock && (
+              <>
+                <button disabled={idx <= 1} onClick={() => mapStore.reorderLayer(layer.id, -1)} title="Naikkan urutan">up</button>
+                <button disabled={idx >= total - 1} onClick={() => mapStore.reorderLayer(layer.id, 1)} title="Turunkan urutan">dn</button>
+                <button className="layer-remove-btn" onClick={() => mapStore.removeLayer(layer.id)} title="Hapus layer">x</button>
+              </>
+            )}
+            {isBlock && (
+              <span className="layer-protected" title="Block layer tidak bisa dihapus">lock</span>
+            )}
+          </span>
+        )}
       </div>
 
-      {/* Inline layer properties panel */}
-      {isEditing && (
+      {/* Inline layer properties panel (admin only) */}
+      {isEditing && isAdmin && (
         <div className="layer-sym-editor">
           <LayerPropertiesPanel />
         </div>

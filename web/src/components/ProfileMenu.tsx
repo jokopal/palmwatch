@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase, emailToUsername } from "../supabase";
+import { useAuth } from "../auth";
 
 interface Props {
-  session: { user?: { email?: string; user_metadata?: { role?: string } } } | null;
+  session: { user?: { email?: string } } | null;
 }
 
-// Icon profil di header: menampilkan informasi akun (username) & role, dengan
-// menu untuk logout.
+// Icon profil di header: menampilkan informasi akun (username) & role (dari
+// public.users via context), dengan menu untuk logout.
 export default function ProfileMenu({ session }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { role } = useAuth();
 
   const email = session?.user?.email ?? "";
   const username = emailToUsername(email) || "guest";
-  const role = session?.user?.user_metadata?.role ?? (session ? "viewer" : "preview");
   const initial = (username[0] ?? "?").toUpperCase();
 
   useEffect(() => {
