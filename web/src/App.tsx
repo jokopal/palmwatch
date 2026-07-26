@@ -7,6 +7,7 @@ import BasemapSwitcher from "./components/BasemapSwitcher";
 import MapTools from "./components/MapTools";
 import FloatingLegend from "./components/FloatingLegend";
 import LeftPanel from "./components/LeftPanel";
+import UserPanel from "./components/UserPanel";
 import BottomPanel from "./components/BottomPanel";
 import ProfileMenu from "./components/ProfileMenu";
 import ProjectSwitcher from "./components/ProjectSwitcher";
@@ -266,13 +267,20 @@ export default function App() {
             <div className="ResizeHandleInner" />
           </PanelResizeHandle>
 
-          {/* Right Area (Layer workspace panel) */}
+          {/* Right Area — admin: layer workspace; user: viewer + input stub */}
           <Panel defaultSize={25} minSize={0} collapsible={true}>
-            <LeftPanel
-              canUpload={isAdmin}
-              projectId={projectId}
-              onBlocksImported={() => { reloadProjects(); reloadData(); }}
-            />
+            {isAdmin ? (
+              <LeftPanel
+                canUpload={isAdmin}
+                projectId={projectId}
+                onBlocksImported={() => { reloadProjects(); reloadData(); }}
+              />
+            ) : (
+              <UserPanel
+                project={projects.find((p) => p.id === projectId)}
+                summary={summary}
+              />
+            )}
           </Panel>
 
         </PanelGroup>

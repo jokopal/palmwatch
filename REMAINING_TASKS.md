@@ -25,7 +25,9 @@
     `useIsAdmin`/`useAuth` + `fetchMyRole` dari public.users). User = read-only:
     disembunyikan ✎ simbologi, add/hapus/reorder layer, Available Layers, Run Analysis,
     Upload tab, project new/share. Tetap bisa: lihat layer, toggle visibility, basemap/3D/inset.
-  - Fase 3: shell kondisional admin console vs user viewer + menu Input (stub).
+  - ✅ **Fase 3 SELESAI** (verified 2 role): shell kondisional — admin dapat LeftPanel
+    (layer workspace penuh); user dapat `UserPanel` (info project + legenda + menu
+    **Input Lapangan** stub 5 form + note read-only). Peta/bottom-panel/header dibagi.
   - Fase 4: manajemen user (assign akses project) + Edge Function buat/hapus user.
   - Fase 5: verifikasi admin vs user.
 
