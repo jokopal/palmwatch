@@ -28,8 +28,13 @@
   - ✅ **Fase 3 SELESAI** (verified 2 role): shell kondisional — admin dapat LeftPanel
     (layer workspace penuh); user dapat `UserPanel` (info project + legenda + menu
     **Input Lapangan** stub 5 form + note read-only). Peta/bottom-panel/header dibagi.
-  - Fase 4: manajemen user (assign akses project) + Edge Function buat/hapus user.
-  - Fase 5: verifikasi admin vs user.
+  - ✅ **Fase 4 (inti) SELESAI**: DB policy admin read/update `users`; `web/src/admin.ts`
+    + `AdminUsers` modal (set role, assign/cabut akses project per-user via checkbox,
+    buat/hapus akun). Tombol ⚙ User di header (admin only). Terverifikasi DB (admin set
+    role & member; user ditolak) + UI. **Edge Function `admin-users` ditulis** (buat/hapus
+    akun, verifikasi admin) — **perlu di-deploy** oleh pemilik project (lihat
+    `supabase/functions/admin-users/README.md`); sampai itu, akun dibuat via dashboard.
+  - ✅ **Fase 5**: verifikasi admin vs user via preview (semua fase).
 
 - [ ] **#3 Role gating user vs admin** — *(HOLD atas permintaan user)*
   User = view-only; Admin = full (upload, edit simbologi, kelola project). Saat ini

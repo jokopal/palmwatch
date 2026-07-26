@@ -11,6 +11,7 @@ import UserPanel from "./components/UserPanel";
 import BottomPanel from "./components/BottomPanel";
 import ProfileMenu from "./components/ProfileMenu";
 import ProjectSwitcher from "./components/ProjectSwitcher";
+import AdminUsers from "./components/AdminUsers";
 import SharedView from "./components/SharedView";
 import Login from "./components/Login";
 import AnalysisBar from "./components/AnalysisBar";
@@ -69,6 +70,7 @@ export default function App() {
   // Role (Fase 2 RBAC) — dari public.users; di preview via VITE_PREVIEW_ROLE.
   const [role, setRole] = useState<"admin" | "user">("user");
   const isAdmin = role === "admin";
+  const [showUsers, setShowUsers] = useState(false);
   useEffect(() => {
     if (!authed) return;
     if (previewBypass) {
@@ -188,9 +190,22 @@ export default function App() {
               )}
             </div>
           )}
+          {isAdmin && (
+            <button className="header-admin-btn" onClick={() => setShowUsers(true)} title="Kelola user & akses project">
+              ⚙ User
+            </button>
+          )}
           <ProfileMenu session={session} />
         </div>
       </header>
+
+      {isAdmin && showUsers && (
+        <AdminUsers
+          projects={projects}
+          currentUserId={session?.user?.id}
+          onClose={() => setShowUsers(false)}
+        />
+      )}
 
       {/* Analysis toolbar — admin only (menulis hasil ke DB) */}
       {isAdmin && <AnalysisBar projectId={projectId} />}
