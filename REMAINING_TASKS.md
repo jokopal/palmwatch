@@ -31,9 +31,9 @@
   - ✅ **Fase 4 (inti) SELESAI**: DB policy admin read/update `users`; `web/src/admin.ts`
     + `AdminUsers` modal (set role, assign/cabut akses project per-user via checkbox,
     buat/hapus akun). Tombol ⚙ User di header (admin only). Terverifikasi DB (admin set
-    role & member; user ditolak) + UI. **Edge Function `admin-users` ditulis** (buat/hapus
-    akun, verifikasi admin) — **perlu di-deploy** oleh pemilik project (lihat
-    `supabase/functions/admin-users/README.md`); sampai itu, akun dibuat via dashboard.
+    role & member; user ditolak) + UI. **Edge Function `admin-users` ✅ DI-DEPLOY**
+    (buat/hapus akun, guard admin verified: non-admin ditolak 401). Buat/hapus akun
+    dari web app kini berfungsi. CLI mesin ini sudah login+link ke project.
   - ✅ **Fase 5**: verifikasi admin vs user via preview (semua fase).
 
 - [ ] **#3 Role gating user vs admin** — *(HOLD atas permintaan user)*
