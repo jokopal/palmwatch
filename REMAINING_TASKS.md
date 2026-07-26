@@ -16,8 +16,11 @@
 
 - [ ] **#3 RBAC admin vs user (produksi)** — lihat [AUDIT_RBAC.md](AUDIT_RBAC.md).
   Keputusan: Edge Function utk buat user · shell kondisional · auto-assign Demo ke `user`.
-  - Fase 1: DB security (users.role, project_members, is_admin()/is_member(), harden
-    semua DEFINER RPC, kunci write→admin, scope baca→member, revoke anon).
+  - ✅ **Fase 1 SELESAI** (applied ke DB live + verified): `project_members` + `is_admin()`/
+    `is_member()`; harden `import_project_blocks`/`create_project`/`set_project_public` (admin);
+    `blocks_geojson`/`block_summary`/`block_timeseries`/`list_projects` member-scoped; RLS
+    blocks/vector_layers/projects (write admin, read member); revoke anon; share publik
+    dipertahankan via helper `_blocks_fc`/`_block_summary` (enforce flag); user→Demo.
   - Fase 2: `useAuth()` role context; user = read-only UI.
   - Fase 3: shell kondisional admin console vs user viewer + menu Input (stub).
   - Fase 4: manajemen user (assign akses project) + Edge Function buat/hapus user.
