@@ -65,10 +65,18 @@ export interface Summary {
 
 export interface TimeseriesPoint {
   date: string;
-  ndvi: number;
-  evi: number;
-  rainfall_30d_mm: number;
-  tbs_ton_ha: number;
+  source?: string | null;
+  ndvi: number | null;
+  evi: number | null;
+  lai?: number | null;
+  fpar?: number | null;
+  lst_celsius?: number | null;
+  temp_2m_mean?: number | null;
+  rainfall_30d_mm: number | null;
+  rainfall_90d_mm?: number | null;
+  soil_moisture?: number | null;
+  et_stress_ratio?: number | null;
+  tbs_ton_ha: number | null;
 }
 
 export interface Timeseries {

@@ -1568,6 +1568,10 @@ h1, h2, h3,
 .bp-table-join-banner{padding:var(--sp-2) var(--sp-3);background:rgba(29,111,164,0.08);border-bottom:1px solid rgba(96,165,250,0.15);font-size:var(--text-xs);color:var(--text-muted);flex-shrink:0;}
 .temporal-controls{padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:var(--sp-2);flex-shrink:0;}
 .temporal-meta{font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-data);}
+.temporal-mode-toggle{display:flex;gap:var(--sp-1);padding:var(--sp-2) var(--sp-4) 0;flex-shrink:0;}
+.temporal-mode-toggle button{padding:4px var(--sp-3);border:1px solid var(--border);background:var(--surface);border-radius:var(--r-pill);cursor:pointer;font-family:var(--font-ui);font-size:var(--text-xs);color:var(--text-muted);transition:all var(--t-fast);}
+.temporal-mode-toggle button:hover{border-color:var(--color-stone);color:var(--text);}
+.temporal-mode-toggle button.on{background:var(--primary-bg);border-color:var(--color-teal-mid);color:var(--primary);font-weight:600;}
 .temporal-delta-table{padding:0 var(--sp-4) var(--sp-4);}
 .concl-analysis-header{display:flex;align-items:center;justify-content:space-between;padding:var(--sp-2) var(--sp-4);background:var(--surface-2);border-bottom:1px solid var(--border-subtle);flex-shrink:0;}
 .concl-meta{display:flex;align-items:center;gap:var(--sp-3);font-size:var(--text-xs);color:var(--text-muted);}

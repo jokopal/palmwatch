@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { BlockCollection } from "../types";
-import { PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
+import type { BlockCollection, Timeseries } from "../types";
+import { api, PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
 import { useMapStore } from "../store/mapStore";
 import type { BlockAnalysisSummary, TableRow, AnalysisResult } from "../store/mapStore";
 import {
@@ -8,8 +8,23 @@ import {
   type TemporalSnapshot,
 } from "../analysisApi";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, LineChart, Line, CartesianGrid,
+  XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
+
+// Variabel dataset EO untuk mode Temporal "Dataset" (footer analisis).
+const EO_VARS: { key: keyof Timeseries["series"][number]; label: string; unit: string; color: string }[] = [
+  { key: "rainfall_30d_mm", label: "Curah Hujan 30 hari", unit: "mm",     color: "#1D6FA4" },
+  { key: "rainfall_90d_mm", label: "Curah Hujan 90 hari", unit: "mm",     color: "#0891b2" },
+  { key: "temp_2m_mean",    label: "Suhu Udara 2 m",       unit: "°C", color: "#D97706" },
+  { key: "lst_celsius",     label: "LST (Suhu Permukaan)", unit: "°C", color: "#C0392B" },
+  { key: "ndvi",            label: "NDVI",                 unit: "",       color: "#5FA83F" },
+  { key: "evi",             label: "EVI",                  unit: "",       color: "#4D7C0F" },
+  { key: "lai",             label: "LAI",                  unit: "",       color: "#166534" },
+  { key: "soil_moisture",   label: "Kelembapan Tanah",     unit: "",       color: "#0E7490" },
+  { key: "et_stress_ratio", label: "Rasio Stres ET",       unit: "",       color: "#6D28D9" },
+  { key: "tbs_ton_ha",      label: "Produksi TBS",         unit: "ton/ha", color: "#8A5A34" },
+];
 
 interface Props {
   data: BlockCollection | null;
@@ -114,7 +129,7 @@ export default function BottomPanel({ data, selectedId, onSelect }: Props) {
             tableLayer={tableLayer ? { name: tableLayer.name, valueFields: tableLayer.valueFields } : undefined}
           />
         )}
-        {tab === "temporal" && <TemporalTab />}
+        {tab === "temporal" && <TemporalTab selectedId={selectedId} />}
         {tab === "conclusion" && (
           <ConclusionTab
             analysisResult={analysisResult}
@@ -185,9 +200,96 @@ function fmt(v: unknown): string {
 }
 
 // ── Temporal Tab ──────────────────────────────────────────────────────────────
-// Pilih layer_group dari salah satu reference layer yang ada, lalu lihat
-// perkembangan setiap snapshot temporal (% coverage per kelas per periode).
-function TemporalTab() {
+// Dua mode: "Dataset EO" (tren variabel dari eo_readings per blok) dan
+// "Layer Referensi" (perkembangan kelas antar snapshot temporal).
+function TemporalTab({ selectedId }: { selectedId: string | null }) {
+  const [mode, setMode] = useState<"dataset" | "reference">("dataset");
+  return (
+    <div className="temporal-tab">
+      <div className="temporal-mode-toggle">
+        <button className={mode === "dataset" ? "on" : ""} onClick={() => setMode("dataset")}>
+          Dataset EO
+        </button>
+        <button className={mode === "reference" ? "on" : ""} onClick={() => setMode("reference")}>
+          Layer Referensi
+        </button>
+      </div>
+      {mode === "dataset" ? <DatasetTemporal selectedId={selectedId} /> : <ReferenceTemporal />}
+    </div>
+  );
+}
+
+// ── Dataset EO temporal: tren satu variabel dari eo_readings untuk blok terpilih.
+function DatasetTemporal({ selectedId }: { selectedId: string | null }) {
+  const [variable, setVariable] = useState<string>("rainfall_30d_mm");
+  const [ts, setTs]           = useState<Timeseries | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedId) { setTs(null); return; }
+    setLoading(true);
+    api.timeseries(selectedId)
+      .then(setTs).catch(() => setTs(null)).finally(() => setLoading(false));
+  }, [selectedId]);
+
+  const varDef = EO_VARS.find((v) => v.key === variable) ?? EO_VARS[0];
+  const rows = useMemo(() => {
+    const series = ts?.series ?? [];
+    return series
+      .map((p) => ({ date: p.date, value: (p as unknown as Record<string, number | null>)[variable] }))
+      .filter((r) => r.value != null);
+  }, [ts, variable]);
+
+  if (!selectedId) {
+    return (
+      <div className="bp-empty" style={{ padding: "24px 16px", textAlign: "center" }}>
+        Pilih blok di peta atau tabel untuk melihat tren dataset EO (curah hujan, suhu, NDVI, dll.).
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="temporal-controls">
+        <label className="control-label">Variabel Dataset</label>
+        <select className="control-select" value={variable} onChange={(e) => setVariable(e.target.value)}>
+          {EO_VARS.map((v) => (
+            <option key={v.key} value={v.key}>{v.label}{v.unit ? ` (${v.unit})` : ""}</option>
+          ))}
+        </select>
+        <span className="temporal-meta">
+          Blok <b>{selectedId}</b> &middot; {rows.length} titik
+          {ts?.series?.some((p) => p.source === "open-meteo") && " · sumber Open-Meteo"}
+        </span>
+      </div>
+
+      {loading && <div className="bp-empty">Memuat time-series…</div>}
+      {!loading && rows.length === 0 && (
+        <div className="bp-empty" style={{ padding: "18px 16px", textAlign: "center" }}>
+          Belum ada data <b>{varDef.label}</b> untuk blok ini. Jalankan pipeline data
+          (mis. <span style={{ fontFamily: "var(--font-data)" }}>run_climate.py</span>) untuk mengisinya.
+        </div>
+      )}
+      {!loading && rows.length > 0 && (
+        <div className="temporal-chart">
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={rows} margin={{ top: 8, right: 14, bottom: 20, left: -4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} unit={varDef.unit ? ` ${varDef.unit}` : ""} width={48} />
+              <Tooltip formatter={(v) => `${v}${varDef.unit ? ` ${varDef.unit}` : ""}`} />
+              <Line type="monotone" dataKey="value" name={varDef.label}
+                stroke={varDef.color} strokeWidth={2} dot={{ r: 2 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Layer Referensi temporal (perkembangan kelas antar snapshot) ────────────────
+function ReferenceTemporal() {
   const activeLayers    = useMapStore((s) => s.activeLayers);
   const refLayers       = activeLayers.filter(
     (l) => l.kind === "reference" && l.referenceConfig?.layerGroup,
@@ -258,7 +360,7 @@ function TemporalTab() {
   }
 
   return (
-    <div className="temporal-tab">
+    <>
       <div className="temporal-controls">
         <label className="control-label">Layer Group Temporal</label>
         <select className="control-select"
@@ -336,7 +438,7 @@ function TemporalTab() {
           )}
         </>
       )}
-    </div>
+    </>
   );
 }
 

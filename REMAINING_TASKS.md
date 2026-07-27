@@ -32,9 +32,19 @@
     legend COG) & RLS DB (member baca global, non-admin insert 42501, anon 42501).
     Catatan: paint on-map tak bisa diverifikasi di env ini (render loop MapLibre berhenti
     saat Browser pane tak ditampilkan) — akan tereksekusi nyata di B2 saat COG diunggah.
-  - [ ] **C1 Hujan & suhu** — fetcher Open-Meteo/NASA POWER per centroid blok → `eo_readings`.
+  - ✅ **C1 Hujan & suhu SELESAI + DIJALANKAN** (data nyata di DB live): `run_climate.py`
+    (Open-Meteo Archive, tanpa key) query per-CENTROID blok (clip AOI) → `eo_readings`
+    (rainfall_30d/90d + kolom baru `temp_2m_mean`), source='open-meteo'. 144 baris real
+    2024 utk Demo (12 blok × 12 bln; hujan 160–413mm/30h, suhu 26–28°C). Migrasi
+    `20260710000000` + `block_timeseries` diperluas multi-variabel (member-scoped).
+  - ✅ **Temporal dataset option SELESAI** — panel Temporal (footer) mode **Dataset EO**:
+    selector variabel (hujan/suhu/NDVI/EVI/LAI/soil/ET/TBS) + LineChart per blok terpilih;
+    mode **Layer Referensi** dipertahankan. Verified UI + RPC (BLK-001 15 titik authenticated).
   - [ ] **B2 Upload GeoTIFF** — mode "Raster (COG)" di UploadTab (validasi COG, unggah Storage).
-  - [ ] **C2 Tanah (SoilGrids)** · **C3 DEM+drainase (TWI/HAND)** · **C4 NDVI (STAC Sentinel-2)**.
+  - [ ] **C2 Tanah (SoilGrids)** — `run_soil.py` per centroid → `soil_properties`.
+  - [ ] **C3 DEM+drainase (TWI/HAND)** — fetch DEM clip AOI → COG + turunan TWI → `raster_layers`.
+        + **opsi clip raster ke boundary** (setMask) untuk performa (user request).
+  - [ ] **C4 NDVI (STAC Sentinel-2)** — Planetary Computer/CDSE keyless, zonal → `eo_readings`.
 
 
 - [ ] **#3 RBAC admin vs user (produksi)** — lihat [AUDIT_RBAC.md](AUDIT_RBAC.md).
