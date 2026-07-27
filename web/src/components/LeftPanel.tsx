@@ -4,6 +4,7 @@ import UploadTab from "./UploadTab";
 import { mapStore, useMapStore, type AvailableLayer } from "../store/mapStore";
 import { listReferenceLayers } from "../analysisApi";
 import { getVectorLayerGeojson } from "../vectorLayers";
+import { listRasterLayers } from "../rasterLayers";
 
 interface Props {
   canUpload: boolean;
@@ -19,6 +20,7 @@ export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Pr
   // Muat semua layer DB (reference + generic) sekali di awal dan setelah upload
   const loadDbLayers = () => {
     listReferenceLayers(projectId ?? undefined).then(mapStore.setDbLayers).catch(() => {});
+    listRasterLayers(projectId).then(mapStore.setRasterLayers).catch(() => {});
   };
 
   useEffect(() => {

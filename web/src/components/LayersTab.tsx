@@ -15,6 +15,7 @@ const KIND_LABEL: Record<string, string> = {
   reference: "REF",
   gee:       "GEE",
   db:        "DB",
+  raster:    "COG",
 };
 
 // Tab "Layers": manajemen layer aktif dengan role badge, simbologi, dan proteksi block layer.
@@ -23,6 +24,7 @@ const KIND_LABEL: Record<string, string> = {
 export default function LayersTab({ onAddDb }: Props) {
   const activeLayers = useMapStore((s) => s.activeLayers);
   const dbLayers     = useMapStore((s) => s.dbLayers);
+  const rasterLayers = useMapStore((s) => s.rasterLayers);
   const tableLayer   = useMapStore((s) => s.tableLayer);
   const isAdmin      = useIsAdmin();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -137,6 +139,34 @@ export default function LayersTab({ onAddDb }: Props) {
                   className="add-layer-btn"
                   disabled={activeRefs.has(a.sourceRef)}
                   onClick={() => onAddDb(a)}
+                >
+                  {activeRefs.has(a.sourceRef) ? "ADDED" : "+ ADD"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Raster COG Sources */}
+        <div className="avail-group-title">Raster (COG)</div>
+        {rasterLayers.length === 0 ? (
+          <div className="avail-empty">
+            Belum ada raster. Buka tab <b>Upload</b> untuk menambah GeoTIFF (COG).
+          </div>
+        ) : (
+          <ul className="layer-list">
+            {rasterLayers.map((a) => (
+              <li key={a.id}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
+                  <span>{a.name}</span>
+                  <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+                    COG{a.rasterConfig?.category ? ` · ${a.rasterConfig.category}` : ""}
+                  </span>
+                </div>
+                <button
+                  className="add-layer-btn"
+                  disabled={activeRefs.has(a.sourceRef)}
+                  onClick={() => mapStore.addRasterLayer(a)}
                 >
                   {activeRefs.has(a.sourceRef) ? "ADDED" : "+ ADD"}
                 </button>

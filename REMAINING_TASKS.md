@@ -23,8 +23,15 @@
     (KPI & subjudul disembunyikan). `viewport-fit=cover` + `theme-color`. Desktop tak berubah.
     Catatan: sheet & tab bar `position:fixed` (menghindari shell ter-scroll saat sheet buka).
   - [ ] **A2 PWA installable** — `vite-plugin-pwa` (manifest + service worker cache app-shell/basemap).
-  - [ ] **B1 Infra COG** — bucket Storage `rasters` (RLS admin-write/member-read) + tabel
-    `raster_layers` + `maplibre-cog-protocol` → raster source di peta + legend.
+  - ✅ **B1 Infra COG SELESAI** (migrasi applied ke DB live + RLS verified): bucket Storage
+    `rasters` (public-read, tulis admin via policy storage.objects) + tabel `raster_layers`
+    (admin-write/member-read, anon revoked) + lib `@geomatico/maplibre-cog-protocol`
+    (protokol `cog://` registered di MapView). Store kind `raster` + `addRasterLayer`/
+    `updateRasterOpacity`; `rasterLayers.ts` (list/insert/delete + `rasterPublicUrl`);
+    section "Raster (COG)" di LayersTab; legend gradient. Verified store→UI (Layer Aktif +
+    legend COG) & RLS DB (member baca global, non-admin insert 42501, anon 42501).
+    Catatan: paint on-map tak bisa diverifikasi di env ini (render loop MapLibre berhenti
+    saat Browser pane tak ditampilkan) — akan tereksekusi nyata di B2 saat COG diunggah.
   - [ ] **C1 Hujan & suhu** — fetcher Open-Meteo/NASA POWER per centroid blok → `eo_readings`.
   - [ ] **B2 Upload GeoTIFF** — mode "Raster (COG)" di UploadTab (validasi COG, unggah Storage).
   - [ ] **C2 Tanah (SoilGrids)** · **C3 DEM+drainase (TWI/HAND)** · **C4 NDVI (STAC Sentinel-2)**.

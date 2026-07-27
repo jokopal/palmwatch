@@ -1511,11 +1511,18 @@ h1, h2, h3,
 .lk-gee{background:rgba(109,40,217,0.15);color:#c084fc;border:1px solid rgba(192,132,252,0.3);}
 .lk-db{background:rgba(245,158,11,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);}
 .lk-table{background:rgba(29,111,164,0.18);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);}
+.lk-raster{background:rgba(138,90,52,0.18);color:#c9873f;border:1px solid rgba(201,135,63,0.35);}
 .layer-kind-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
 .layer-kind-dot.lk-blocks{background:#9BCB4F;}
 .layer-kind-dot.lk-reference{background:var(--color-cyan);}
 .layer-kind-dot.lk-gee{background:#c084fc;}
 .layer-kind-dot.lk-db{background:#fbbf24;}
+.layer-kind-dot.lk-raster{background:var(--color-earth);}
+
+/* Legend raster (gradient) */
+.map-legend-raster{margin:3px 0 2px;}
+.map-legend-raster-bar{height:9px;border-radius:var(--r-pill);border:1px solid rgba(0,0,0,0.12);}
+.map-legend-raster-scale{display:flex;justify-content:space-between;font-size:9px;color:var(--text-muted);margin-top:2px;font-family:var(--font-data);}
 
 /* === 21. LAYERS TAB === */
 .layer-list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-2);}

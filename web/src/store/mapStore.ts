@@ -40,7 +40,19 @@ export interface Symbology {
 // reference = layer referensi multi, di-clip ke AOI, untuk analisis diagnostik
 // gee      = raster EO (GEE) — overlay visual saja
 // db       = vektor generik dari DB (tidak punya diagnostic config)
-export type LayerKind = "blocks" | "reference" | "gee" | "db";
+// raster   = COG mandiri (DEM/tanah/TWI) dari Supabase Storage — overlay raster
+export type LayerKind = "blocks" | "reference" | "gee" | "db" | "raster";
+
+// ── Raster Layer (COG) config ─────────────────────────────────────────────────
+export interface RasterLayerConfig {
+  url: string;                                   // URL publik ke file COG
+  colormap?: string;                             // nama skema warna geomatico (mis. "BrewerSpectral9")
+  minValue?: number;
+  maxValue?: number;
+  bounds?: [number, number, number, number];     // [minx,miny,maxx,maxy] EPSG:4326
+  category?: string;                             // dem|soil|rainfall|twi|ndvi|other
+  opacity: number;                               // 0..1
+}
 
 // ── Reference Layer: kelas diskrit untuk analisis ─────────────────────────────
 export interface LayerClass {
@@ -118,12 +130,14 @@ export interface ActiveLayer {
   data?: GeoJSON.FeatureCollection;
   // Reference layer config (hanya untuk kind === "reference")
   referenceConfig?: ReferenceLayerConfig;
+  // Raster config (hanya untuk kind === "raster")
+  rasterConfig?: RasterLayerConfig;
 }
 
 export interface AvailableLayer {
   id: string;
   name: string;
-  group: "gee" | "db";
+  group: "gee" | "db" | "raster";
   sourceRef?: string;
   // Metadata dari DB
   layerRole?: string;
@@ -131,6 +145,8 @@ export interface AvailableLayer {
   periodLabel?: string;
   layerGroup?: string;
   layerConfig?: { classes?: LayerClass[]; weight?: number };
+  // Metadata raster (group === "raster")
+  rasterConfig?: RasterLayerConfig;
 }
 
 // ── Map State ─────────────────────────────────────────────────────────────────
@@ -148,6 +164,7 @@ export interface MapState {
   analysisResult: AnalysisResult | null;
   analysisRunning: boolean;
   temporalGroupId: string | null;  // layer_group dipilih untuk temporal
+  rasterLayers: AvailableLayer[];  // katalog raster COG dari DB (group === "raster")
 }
 
 const MAX_INSETS = 3;
@@ -195,6 +212,15 @@ function defaultGeeSymbology(color: string): Symbology {
     mode: "single", fill: color, fillOpacity: 0.55,
     stroke: "#1D4E2C", strokeWidth: 0.5, categories: [],
     labelVisible: false, labelFontSize: 9, labelColor: "#14361F",
+  };
+}
+
+function defaultRasterSymbology(): Symbology {
+  // Raster tidak pakai fill vektor; symbology hanya placeholder untuk legend swatch.
+  return {
+    mode: "single", fill: "#8A5A34", fillOpacity: 1,
+    stroke: "#8A5A34", strokeWidth: 0, categories: [],
+    labelVisible: false,
   };
 }
 
@@ -260,6 +286,7 @@ let state: MapState = {
   analysisResult: null,
   analysisRunning: false,
   temporalGroupId: null,
+  rasterLayers: [],
 };
 
 const listeners = new Set<() => void>();
@@ -359,6 +386,36 @@ export const mapStore = {
       selectedLayerId: id,
     });
   },
+
+  // Katalog raster COG dari DB
+  setRasterLayers: (rasterLayers: AvailableLayer[]) => set({ rasterLayers }),
+
+  // Tambah raster COG ke peta (overlay)
+  addRasterLayer: (a: AvailableLayer) => {
+    if (!a.rasterConfig) return;
+    if (state.activeLayers.some((l) => l.kind === "raster" && l.sourceRef === a.sourceRef)) return;
+    const id = `layer-${a.id}-${Date.now()}`;
+    set({
+      activeLayers: [
+        ...state.activeLayers,
+        {
+          id, name: a.name, kind: "raster", visible: true, sourceRef: a.sourceRef,
+          symbology: defaultRasterSymbology(),
+          rasterConfig: a.rasterConfig,
+        },
+      ],
+      selectedLayerId: id,
+    });
+  },
+
+  updateRasterOpacity: (id: string, opacity: number) =>
+    set({
+      activeLayers: state.activeLayers.map((l) =>
+        l.id === id && l.rasterConfig
+          ? { ...l, rasterConfig: { ...l.rasterConfig, opacity } }
+          : l,
+      ),
+    }),
 
   // Tambah layer hasil analisis (zona)
   addAnalysisZoneLayer: (result: AnalysisResult) => {

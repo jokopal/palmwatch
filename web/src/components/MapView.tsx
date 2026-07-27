@@ -1,10 +1,29 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
+import { cogProtocol } from "@geomatico/maplibre-cog-protocol";
 import type { BlockCollection } from "../types";
 import { applyBasemap, baseStyle } from "../map/basemaps";
-import { mapStore, type ActiveLayer, type InsetLayerKey, type Symbology } from "../store/mapStore";
+import { mapStore, type ActiveLayer, type InsetLayerKey, type RasterLayerConfig, type Symbology } from "../store/mapStore";
 import { fillColorExpr } from "../map/symbology";
 import { rampColorExpr } from "../map/ramps";
+
+// Registrasi protokol COG sekali untuk seluruh aplikasi (idempoten).
+let cogProtocolRegistered = false;
+function ensureCogProtocol() {
+  if (cogProtocolRegistered) return;
+  maplibregl.addProtocol("cog", cogProtocol);
+  cogProtocolRegistered = true;
+}
+
+// Bangun URL sumber untuk maplibre-cog-protocol.
+// Single-band + colormap → fragment "#color:<scheme>,<min>,<max>,c"; selain itu RGB apa adanya.
+function cogSourceUrl(cfg: RasterLayerConfig): string {
+  const base = `cog://${cfg.url}`;
+  if (cfg.colormap && cfg.minValue != null && cfg.maxValue != null) {
+    return `${base}#color:${cfg.colormap},${cfg.minValue},${cfg.maxValue},c`;
+  }
+  return base;
+}
 
 // MapView — render engine utama PalmWatch
 // Sumber data:
@@ -59,6 +78,8 @@ const ovSrc  = (id: string) => `ov-src-${id}`;
 const ovFill = (id: string) => `ov-fill-${id}`;
 const ovLine = (id: string) => `ov-line-${id}`;
 const ovLbl  = (id: string) => `ov-lbl-${id}`;
+const rastSrc = (id: string) => `rast-src-${id}`;
+const rastLyr = (id: string) => `rast-${id}`;
 
 // ── Ekspresi label untuk symbol layer ────────────────────────────────────────
 function labelLayoutExpr(sym: Symbology) {
@@ -214,6 +235,53 @@ export default function MapView({
     }
   }
 
+  // ── syncRasterLayers ────────────────────────────────────────────────────────
+  // Rekonsiliasi semua raster COG (kind === "raster") ke MapLibre. Ditaruh DI BAWAH
+  // blok/overlay vektor (beforeId) agar poligon tetap terlihat di atas raster.
+  function syncRasterLayers() {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || colorByRef.current) return;
+
+    const rasterLayers = mapStore.getState().activeLayers.filter(
+      (l) => l.kind === "raster" && l.rasterConfig,
+    );
+    const wantedIds = new Set(rasterLayers.map((l) => l.id));
+
+    // Hapus raster yang tidak lagi ada di store
+    for (const srcId of Object.keys((map.getStyle() as { sources?: Record<string, unknown> }).sources ?? {})) {
+      if (!srcId.startsWith("rast-src-")) continue;
+      const lid = srcId.slice("rast-src-".length);
+      if (!wantedIds.has(lid)) {
+        if (map.getLayer(rastLyr(lid))) map.removeLayer(rastLyr(lid));
+        if (map.getSource(srcId)) map.removeSource(srcId);
+      }
+    }
+
+    // Raster harus di bawah blok vektor: sisipkan sebelum layer blok terbawah.
+    const beforeId = map.getLayer("blocks-fill") ? "blocks-fill" : undefined;
+
+    for (const l of rasterLayers) {
+      const cfg = l.rasterConfig!;
+      const srcId = rastSrc(l.id);
+      const vis = l.visible ? "visible" : "none";
+      if (!map.getSource(srcId)) {
+        map.addSource(srcId, { type: "raster", url: cogSourceUrl(cfg), tileSize: 256 });
+        map.addLayer({
+          id: rastLyr(l.id),
+          type: "raster",
+          source: srcId,
+          paint: { "raster-opacity": cfg.opacity },
+          layout: { visibility: vis },
+        }, beforeId);
+      } else {
+        if (map.getLayer(rastLyr(l.id))) {
+          map.setPaintProperty(rastLyr(l.id), "raster-opacity", cfg.opacity);
+          map.setLayoutProperty(rastLyr(l.id), "visibility", vis);
+        }
+      }
+    }
+  }
+
   // ── Mode 3D ─────────────────────────────────────────────────────────────────
   function apply3D() {
     const map = mapRef.current;
@@ -318,12 +386,14 @@ export default function MapView({
     }
     if (!b.isEmpty() && interactive) map.fitBounds(b, { padding: 60, duration: 0 });
     apply3D();
+    syncRasterLayers(); // raster di bawah blok
     syncOverlayLayers(); // pasang overlay yang sudah dimuat sebelum data masuk
   }
 
   // ── Init map (sekali) ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!ref.current || mapRef.current) return;
+    ensureCogProtocol();
     const map = new maplibregl.Map({
       container: ref.current,
       style: baseStyle(mapStore.getState().basemap),
@@ -338,6 +408,7 @@ export default function MapView({
       if (onMapLoad) onMapLoad(map);
       if (import.meta.env.DEV && interactive) (window as unknown as { __map?: maplibregl.Map }).__map = map;
       renderBlocks();
+      syncRasterLayers();
       syncOverlayLayers();
     });
     mapRef.current = map;
@@ -406,6 +477,8 @@ export default function MapView({
       }
       // Blocks symbology
       applyBlocksSymbology();
+      // Raster COG layers
+      syncRasterLayers();
       // Overlay layers (reference/db/analysis)
       syncOverlayLayers();
       // 3D toggle

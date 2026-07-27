@@ -13,6 +13,30 @@ export default function FloatingLegend() {
     <div className="map-legend">
       <div className="map-legend-title">Legend</div>
       {visible.map((l) => {
+        // Raster COG: tampilkan gradient/solid swatch + rentang nilai, bukan kategori vektor.
+        if (l.kind === "raster") {
+          const rc = l.rasterConfig;
+          const swatch = rc?.colormap
+            ? "linear-gradient(90deg, #2c7fb8, #7fcdbb, #edf8b1)"
+            : "linear-gradient(90deg, #8A5A34, #C9A227)";
+          return (
+            <div className="map-legend-group" key={l.id}>
+              <div className="map-legend-layer">
+                <span>{l.name}</span>
+                <span className="map-legend-kind-tag lk-raster">COG</span>
+              </div>
+              <div className="map-legend-raster">
+                <div className="map-legend-raster-bar" style={{ background: swatch }} />
+                {rc?.minValue != null && rc?.maxValue != null && (
+                  <div className="map-legend-raster-scale">
+                    <span>{rc.minValue}</span><span>{rc.maxValue}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
         const entries = legendEntries(l.symbology, l.name);
         // Untuk reference layer, tandai kelas problematic
         const problematicValues = new Set(
