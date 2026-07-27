@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import { cogProtocol } from "@geomatico/maplibre-cog-protocol";
+import { cogProtocol, setMask, clearMask } from "@geomatico/maplibre-cog-protocol";
 import type { BlockCollection } from "../types";
 import { applyBasemap, baseStyle } from "../map/basemaps";
 import { mapStore, type ActiveLayer, type InsetLayerKey, type RasterLayerConfig, type Symbology } from "../store/mapStore";
@@ -280,6 +280,39 @@ export default function MapView({
         }
       }
     }
+    applyRasterMask();
+  }
+
+  // ── applyRasterMask ─────────────────────────────────────────────────────────
+  // Clip SEMUA raster COG ke batas blok (setMask global lib). Hanya peta utama
+  // (bukan inset). Meringankan render & memfokuskan tampilan ke AOI.
+  function applyRasterMask() {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || colorByRef.current) return;
+    const clip = mapStore.getState().clipRasterToBoundary;
+    const fc = dataRef.current;
+    const hasRaster = mapStore.getState().activeLayers.some((l) => l.kind === "raster");
+    if (clip && hasRaster && fc && fc.features.length > 0) {
+      setMask(fc as GeoJSON.FeatureCollection);
+    } else {
+      clearMask();
+    }
+    map.triggerRepaint();
+  }
+
+  // Bangun ulang semua source raster (dipakai saat toggle clip berubah agar tile
+  // ter-decode ulang dengan mask baru — tile lama di-cache tak otomatis refresh).
+  function rebuildRasterSources() {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    for (const srcId of Object.keys((map.getStyle() as { sources?: Record<string, unknown> }).sources ?? {})) {
+      if (!srcId.startsWith("rast-src-")) continue;
+      const lid = "rast-" + srcId.slice("rast-src-".length);
+      if (map.getLayer(lid)) map.removeLayer(lid);
+      if (map.getSource(srcId)) map.removeSource(srcId);
+    }
+    applyRasterMask();
+    syncRasterLayers();
   }
 
   // ── Mode 3D ─────────────────────────────────────────────────────────────────
@@ -435,6 +468,7 @@ export default function MapView({
   useEffect(() => {
     let curBasemap = mapStore.getState().basemap;
     let cur3D = mapStore.getState().threeD;
+    let curClip = mapStore.getState().clipRasterToBoundary;
 
     const applyBlocksSymbology = () => {
       const map = mapRef.current;
@@ -484,6 +518,9 @@ export default function MapView({
       // 3D toggle
       const n3d = mapStore.getState().threeD;
       if (n3d !== cur3D) { cur3D = n3d; apply3D(); }
+      // Clip raster ke boundary toggle
+      const nClip = mapStore.getState().clipRasterToBoundary;
+      if (nClip !== curClip) { curClip = nClip; rebuildRasterSources(); }
     });
     return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

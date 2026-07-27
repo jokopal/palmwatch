@@ -165,6 +165,7 @@ export interface MapState {
   analysisRunning: boolean;
   temporalGroupId: string | null;  // layer_group dipilih untuk temporal
   rasterLayers: AvailableLayer[];  // katalog raster COG dari DB (group === "raster")
+  clipRasterToBoundary: boolean;   // clip semua raster COG ke batas blok (performa + fokus AOI)
 }
 
 const MAX_INSETS = 3;
@@ -287,6 +288,7 @@ let state: MapState = {
   analysisRunning: false,
   temporalGroupId: null,
   rasterLayers: [],
+  clipRasterToBoundary: true,
 };
 
 const listeners = new Set<() => void>();
@@ -416,6 +418,8 @@ export const mapStore = {
           : l,
       ),
     }),
+
+  setClipRasterToBoundary: (clipRasterToBoundary: boolean) => set({ clipRasterToBoundary }),
 
   // Tambah layer hasil analisis (zona)
   addAnalysisZoneLayer: (result: AnalysisResult) => {

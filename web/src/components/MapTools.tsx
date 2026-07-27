@@ -5,9 +5,22 @@ export default function MapTools() {
   const insetsEnabled = useMapStore((s) => s.insetsEnabled);
   const count = useMapStore((s) => s.insets.length);
   const threeD = useMapStore((s) => s.threeD);
+  const hasRaster = useMapStore((s) => s.activeLayers.some((l) => l.kind === "raster"));
+  const clip = useMapStore((s) => s.clipRasterToBoundary);
 
   return (
     <div className="map-tools">
+      {hasRaster && (
+        <button
+          className={`map-tool${clip ? " active" : ""}`}
+          onClick={() => mapStore.setClipRasterToBoundary(!clip)}
+          title={clip
+            ? "Raster di-clip ke batas blok (klik untuk tampilkan penuh)"
+            : "Clip raster ke batas blok — fokus AOI, render lebih ringan"}
+        >
+          ✂
+        </button>
+      )}
       <button
         className={`map-tool${threeD ? " active" : ""}`}
         onClick={() => mapStore.setThreeD(!threeD)}

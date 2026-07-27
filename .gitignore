@@ -41,3 +41,6 @@ _blueprint_extract.txt
 
 # Brand kit build cache
 brand/__pycache__/
+
+# Generated COG output (Track C3) — regenerate via run_dem.py
+out_cog/

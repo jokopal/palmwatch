@@ -40,11 +40,21 @@
   - ✅ **Temporal dataset option SELESAI** — panel Temporal (footer) mode **Dataset EO**:
     selector variabel (hujan/suhu/NDVI/EVI/LAI/soil/ET/TBS) + LineChart per blok terpilih;
     mode **Layer Referensi** dipertahankan. Verified UI + RPC (BLK-001 15 titik authenticated).
+  - ✅ **C2 Tanah (SoilGrids) SELESAI** — `run_soil.py` (SoilGrids v2.0 ISRIC, keyless,
+    per-centroid clip AOI, throttle 13s) → `soil_properties` (pH/SOC/clay/sand/CEC/N).
+    Auto-tampil di BlockPanel (soil_ph/soc sudah di-LEFT JOIN `blocks_geojson`).
+  - ✅ **C4 NDVI (STAC Sentinel-2) SELESAI + DIJALANKAN** — `run_ndvi.py` (Planetary
+    Computer STAC keyless; scene termurah-awan per kuartal; baca B04/B08 HANYA jendela
+    tiap blok via rasterio.mask = clip AOI/range-request; NDVI zonal + offset BOA -1000)
+    → `eo_readings.ndvi_mean`. 48 baris real 2024 (NDVI 0.05–0.61), source='sentinel-2-stac'.
+  - ✅ **Opsi clip raster ke boundary SELESAI** — store `clipRasterToBoundary` (default on) +
+    tombol ✂ di MapTools; MapView pakai `setMask(blocks FC)` (global lib) → render raster
+    di-clip ke batas blok (fokus AOI, lebih ringan); rebuild source saat toggle berubah.
+  - ⏸ **C3 DEM+drainase** — `run_dem.py` SELESAI & TERUJI generate (Copernicus GLO-30 keyless,
+    clip AOI bbox, turunkan slope=proxy drainase, tulis COG kecil ~200KB). **Unggah ke
+    Storage TERBLOKIR**: butuh `SUPABASE_SERVICE_KEY` di `.env` (belum ada) ATAU unggah via
+    tab Upload (B2). Set key → run_dem.py auto-upload+register ke `raster_layers`.
   - [ ] **B2 Upload GeoTIFF** — mode "Raster (COG)" di UploadTab (validasi COG, unggah Storage).
-  - [ ] **C2 Tanah (SoilGrids)** — `run_soil.py` per centroid → `soil_properties`.
-  - [ ] **C3 DEM+drainase (TWI/HAND)** — fetch DEM clip AOI → COG + turunan TWI → `raster_layers`.
-        + **opsi clip raster ke boundary** (setMask) untuk performa (user request).
-  - [ ] **C4 NDVI (STAC Sentinel-2)** — Planetary Computer/CDSE keyless, zonal → `eo_readings`.
 
 
 - [ ] **#3 RBAC admin vs user (produksi)** — lihat [AUDIT_RBAC.md](AUDIT_RBAC.md).
