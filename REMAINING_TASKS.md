@@ -22,7 +22,11 @@
     komponen desktop (MapView/LeftPanel/UserPanel/BottomPanel/AnalysisBar). Header ringkas
     (KPI & subjudul disembunyikan). `viewport-fit=cover` + `theme-color`. Desktop tak berubah.
     Catatan: sheet & tab bar `position:fixed` (menghindari shell ter-scroll saat sheet buka).
-  - [ ] **A2 PWA installable** — `vite-plugin-pwa` (manifest + service worker cache app-shell/basemap).
+  - ✅ **A2 PWA installable SELESAI** — `vite-plugin-pwa` (autoUpdate): manifest (ikon brand
+    192/512 + maskable, theme #14361F, standalone, id), service worker precache app-shell
+    (23 entri ~2.8MB, batas dinaikkan utk bundle 2.1MB) + runtimeCaching offline: basemap
+    tiles (Carto/OSM/OpenTopo/ArcGIS CacheFirst 30h), glyph MapLibre, Google Fonts. SW aktif
+    di build (HTTPS Netlify) — bukan dev. Verified: build artefak (manifest/sw.js/registerSW).
   - ✅ **B1 Infra COG SELESAI** (migrasi applied ke DB live + RLS verified): bucket Storage
     `rasters` (public-read, tulis admin via policy storage.objects) + tabel `raster_layers`
     (admin-write/member-read, anon revoked) + lib `@geomatico/maplibre-cog-protocol`
@@ -54,7 +58,12 @@
     clip AOI bbox, turunkan slope=proxy drainase, tulis COG kecil ~200KB). **Unggah ke
     Storage TERBLOKIR**: butuh `SUPABASE_SERVICE_KEY` di `.env` (belum ada) ATAU unggah via
     tab Upload (B2). Set key → run_dem.py auto-upload+register ke `raster_layers`.
-  - [ ] **B2 Upload GeoTIFF** — mode "Raster (COG)" di UploadTab (validasi COG, unggah Storage).
+  - ✅ **B2 Upload GeoTIFF SELESAI** — mode "Raster (COG GeoTIFF)" di UploadTab: pilih .tif,
+    kategori + skema warna + min/max, `uploadRasterCog` (rasterLayers.ts) unggah ke bucket
+    `rasters` via sesi ADMIN (RLS admin-write, **tanpa service key**), validasi COG via
+    `getCogMetadata` (ambil bbox; hapus file bila bukan COG), catat ke `raster_layers`.
+    **Ini membuka jalur unggah C3**: admin tinggal unggah `out_cog/dem.tif`/`slope.tif`.
+    Verified UI (mode+field+submit) + typecheck/build. Upload nyata butuh sesi admin login.
 
 
 - [ ] **#3 RBAC admin vs user (produksi)** — lihat [AUDIT_RBAC.md](AUDIT_RBAC.md).

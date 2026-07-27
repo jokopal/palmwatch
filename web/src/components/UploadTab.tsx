@@ -7,20 +7,31 @@ import { mapStore } from "../store/mapStore";
 import type { LayerClass, TableLayerConfig } from "../store/mapStore";
 
 type FC = GeoJSON.FeatureCollection;
-type Mode = "blocks" | "reference" | "table";
+type Mode = "blocks" | "reference" | "table" | "raster";
 
 interface Props {
   onClose?: () => void;
   projectId: string | null;
   onImported?: () => void;
   onRefLayersChanged?: () => void;
+  onRastersChanged?: () => void;
 }
+
+// Skema warna geomatico untuk raster single-band (butuh min/max).
+const RASTER_COLORMAPS = [
+  { value: "", label: "RGB / apa adanya" },
+  { value: "BrewerYlGn9", label: "Vegetasi (kuning→hijau)" },
+  { value: "BrewerYlGnBu9", label: "Drainase/air (kuning→biru)" },
+  { value: "BrewerYlOrRd9", label: "Suhu (kuning→merah)" },
+  { value: "BrewerSpectral9", label: "Spektral (umum)" },
+];
+const RASTER_CATEGORIES = ["dem", "soil", "rainfall", "twi", "ndvi", "other"];
 
 // Tab Upload — 3 mode:
 //  "blocks"    : ganti layer blok utama project (AOI)
 //  "reference" : upload Reference Layer (SHP/GeoJSON) dengan konfigurasi diagnostik
 //  "table"     : import Excel/CSV sebagai Table Layer (join ke block_id)
-export default function UploadTab({ onClose, projectId, onImported, onRefLayersChanged }: Props) {
+export default function UploadTab({ onClose, projectId, onImported, onRefLayersChanged, onRastersChanged }: Props) {
   const [mode, setMode] = useState<Mode>("reference");
   const [name, setName]   = useState("");
   const [fc, setFc]       = useState<FC | null>(null);
@@ -41,6 +52,13 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
   const [tableColumns, setTableColumns] = useState<string[]>([]);
   const [joinField, setJoinField]     = useState("block_id");
   const [valueFields, setValueFields] = useState<string[]>([]);
+
+  // Raster (COG)
+  const [rasterFile, setRasterFile]       = useState<File | null>(null);
+  const [rasterCategory, setRasterCategory] = useState("other");
+  const [rasterColormap, setRasterColormap] = useState("");
+  const [rasterMin, setRasterMin]         = useState("");
+  const [rasterMax, setRasterMax]         = useState("");
 
   const normalize = (raw: unknown): FC => {
     const g = Array.isArray(raw) ? (raw[0] as FC) : (raw as FC);
@@ -144,6 +162,26 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
           onRefLayersChanged?.();
         } else setErr(res.error ?? "Upload gagal.");
 
+      } else if (mode === "raster") {
+        if (!name.trim()) { setErr("Isi nama raster."); return; }
+        if (!rasterFile) { setErr("Pilih file GeoTIFF (COG) terlebih dahulu."); return; }
+        setMsg("Mengunggah & memvalidasi COG…");
+        const { uploadRasterCog } = await import("../rasterLayers");
+        const res = await uploadRasterCog({
+          projectId,
+          file: rasterFile,
+          name: name.trim(),
+          category: rasterCategory,
+          colormap: rasterColormap || undefined,
+          minValue: rasterMin !== "" ? Number(rasterMin) : undefined,
+          maxValue: rasterMax !== "" ? Number(rasterMax) : undefined,
+        });
+        if (res.ok) {
+          setMsg(`Raster "${name.trim()}" terunggah & tercatat.`);
+          setRasterFile(null); setName(""); setRasterColormap(""); setRasterMin(""); setRasterMax("");
+          onRastersChanged?.();
+        } else setErr(res.error ?? "Upload raster gagal.");
+
       } else {
         // Table layer
         if (!name.trim()) { setErr("Isi nama dataset."); return; }
@@ -180,6 +218,7 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
     blocks:    "Blok Utama (AOI)",
     reference: "Reference Layer",
     table:     "Table Layer (Excel/CSV)",
+    raster:    "Raster (COG GeoTIFF)",
   };
 
   return (
@@ -191,7 +230,7 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
 
       {/* Mode selector */}
       <div className="upload-mode">
-        {(["reference", "blocks", "table"] as Mode[]).map((m) => (
+        {(["reference", "blocks", "table", "raster"] as Mode[]).map((m) => (
           <label key={m} className={mode === m ? "on" : ""}>
             <input type="radio" checked={mode === m} onChange={() => { setMode(m); setMsg(null); setErr(null); }} />
             {modeLabels[m]}
@@ -204,6 +243,7 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
         {mode === "blocks" && "Ganti batas blok produksi project. Setiap poligon jadi 1 blok AOI."}
         {mode === "reference" && "Upload layer vektor (SHP/GeoJSON) sebagai layer referensi untuk analisis overlay."}
         {mode === "table" && "Upload Excel/CSV berisi data produksi lapangan. Di-join ke blok via block_id."}
+        {mode === "raster" && "Upload Cloud-Optimized GeoTIFF (DEM, tanah, TWI, dll.). Konversi dulu di luar browser: gdal_translate -of COG in.tif out.tif. Ditampilkan via range-request & bisa di-clip ke boundary."}
       </p>
 
       {/* ── Spatial file input ─────────────────────────────────── */}
@@ -212,6 +252,51 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
           <input type="file" accept=".zip,.geojson,.json" onChange={handleSpatialFile} disabled={busy} />
           <span>Pilih file (.zip Shapefile / .geojson)</span>
         </label>
+      )}
+
+      {/* ── Raster (COG) file input + config ───────────────────── */}
+      {mode === "raster" && (
+        <>
+          <label className="upload-drop">
+            <input type="file" accept=".tif,.tiff" disabled={busy}
+              onChange={(e) => { const f = e.target.files?.[0] ?? null; setRasterFile(f); if (f) setName((n) => n || f.name.replace(/\.(tif|tiff)$/i, "")); e.target.value = ""; }} />
+            <span>{rasterFile ? `Terpilih: ${rasterFile.name}` : "Pilih file COG (.tif / .tiff)"}</span>
+          </label>
+          {rasterFile && (
+            <>
+              <div className="control-group">
+                <label className="control-label">Nama</label>
+                <input className="control-select" value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. DEM Elevasi" />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div className="control-group" style={{ flex: 1 }}>
+                  <label className="control-label">Kategori</label>
+                  <select className="control-select" value={rasterCategory} onChange={(e) => setRasterCategory(e.target.value)}>
+                    {RASTER_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="control-group" style={{ flex: 1 }}>
+                  <label className="control-label">Skema Warna</label>
+                  <select className="control-select" value={rasterColormap} onChange={(e) => setRasterColormap(e.target.value)}>
+                    {RASTER_COLORMAPS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              {rasterColormap && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <div className="control-group" style={{ flex: 1 }}>
+                    <label className="control-label">Nilai Min</label>
+                    <input className="control-select" type="number" value={rasterMin} onChange={(e) => setRasterMin(e.target.value)} placeholder="mis. 0" />
+                  </div>
+                  <div className="control-group" style={{ flex: 1 }}>
+                    <label className="control-label">Nilai Max</label>
+                    <input className="control-select" type="number" value={rasterMax} onChange={(e) => setRasterMax(e.target.value)} placeholder="mis. 150" />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
 
       {/* ── Table file input ───────────────────────────────────── */}
@@ -335,10 +420,14 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
 
       <button className="upload-submit"
         onClick={submit}
-        disabled={busy || (mode !== "table" && !fc) || (mode === "table" && tableRows.length === 0)}>
+        disabled={busy
+          || ((mode === "blocks" || mode === "reference") && !fc)
+          || (mode === "table" && tableRows.length === 0)
+          || (mode === "raster" && !rasterFile)}>
         {busy ? "Memproses..." :
           mode === "blocks" ? "Import sebagai Blok AOI" :
           mode === "reference" ? "Simpan Reference Layer" :
+          mode === "raster" ? "Unggah Raster COG" :
           "Import Table Layer"}
       </button>
 

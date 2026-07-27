@@ -61,6 +61,7 @@ export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Pr
             projectId={projectId}
             onImported={onBlocksImported}
             onRefLayersChanged={() => { loadDbLayers(); mapStore.setLeftTab("layers"); }}
+            onRastersChanged={() => { loadDbLayers(); mapStore.setLeftTab("layers"); }}
           />
         )}
       </div>
