@@ -1638,3 +1638,121 @@ h1, h2, h3,
 .admin-msg { padding: 8px 20px; font-size: var(--text-xs); color: var(--text-dim); background: var(--surface-2); }
 .admin-note { padding: 10px 20px; font-size: var(--text-2xs); color: var(--text-muted); border-top: 1px solid var(--border-subtle); }
 .admin-note code { font-family: var(--font-mono); background: var(--surface-3); padding: 1px 4px; border-radius: 3px; }
+
+/* ═════════════════════════════════════════════════════════════════════
+   25. RESPONSIVE — MOBILE / TABLET SHELL (Fase A1)
+   Peta layar-penuh + bottom-sheet + tab bar bawah untuk petugas lapangan.
+   ═════════════════════════════════════════════════════════════════════ */
+:root { --m-tabbar-h: calc(54px + env(safe-area-inset-bottom, 0px)); }
+
+.m-shell {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  /* Sisakan ruang untuk tab bar yang position:fixed di bawah. */
+  padding-bottom: var(--m-tabbar-h);
+}
+.m-map { flex: 1; position: relative; min-height: 0; }
+.m-map-error {
+  position: absolute; bottom: 12px; left: 12px; right: 12px;
+  background: var(--critical-bg); color: var(--critical);
+  padding: 8px 12px; border-radius: var(--r-md);
+  font-size: var(--text-xs); font-family: var(--font-ui);
+  border: 1px solid rgba(192,57,43,0.2); box-shadow: var(--shadow-sm);
+  z-index: 10;
+}
+
+/* ── Bottom tab bar (fixed ke viewport, tak ikut ter-scroll) ─────────── */
+.m-tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  height: var(--m-tabbar-h);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 10px rgba(14,21,18,0.08);
+  z-index: 46;
+}
+.m-tab {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  transition: color var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.m-tab.active { color: var(--primary); }
+.m-tab-icon { font-size: 19px; line-height: 1; }
+.m-tab-label { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; }
+
+/* ── Bottom sheet (fixed ke viewport, di atas tab bar) ──────────────── */
+.m-sheet {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: var(--m-tabbar-h);
+  height: 56vh;
+  background: var(--surface);
+  border-top-left-radius: var(--r-xl);
+  border-top-right-radius: var(--r-xl);
+  box-shadow: 0 -6px 24px rgba(14,21,18,0.18);
+  display: flex; flex-direction: column;
+  transform: translateY(110%);
+  transition: transform var(--t-base), height var(--t-base);
+  z-index: 45;
+  overflow: hidden;
+}
+.m-sheet.open { transform: translateY(0); }
+/* Penuh: berhenti tepat di bawah header (52px), di atas tab bar. */
+.m-sheet.full { height: calc(100vh - var(--m-tabbar-h) - 60px); }
+.m-sheet-grabber {
+  display: flex; align-items: center; justify-content: center;
+  padding: 8px 0 4px; cursor: grab; touch-action: none;
+  flex-shrink: 0;
+}
+.m-sheet-bar { width: 40px; height: 4px; border-radius: var(--r-pill); background: var(--border); }
+.m-sheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px var(--sp-4) var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.m-sheet-title { font-family: var(--font-display); font-weight: 600; font-size: var(--text-md); color: var(--text); }
+.m-sheet-close {
+  width: 30px; height: 30px; border-radius: var(--r-md);
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-dim); cursor: pointer; font-size: 14px;
+}
+.m-sheet-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0; }
+/* Panel yang di-embed dalam sheet: buang border/tinggi tetap desktop-nya. */
+.m-sheet-body .left-panel,
+.m-sheet-body .user-panel,
+.m-sheet-body .bottom-panel { border: none; height: auto; }
+.m-sheet-body .bottom-panel { min-height: 50vh; }
+
+/* ── Penyesuaian header di layar kecil ──────────────────────────────── */
+@media (max-width: 860px) {
+  .header { padding: 0 var(--sp-3); gap: var(--sp-2); }
+  .header-kpis { display: none !important; }
+  .brand span { display: none; }
+  .brand b { font-size: var(--text-md); }
+  .proj-trigger { max-width: 42vw; font-size: var(--text-sm); padding: 5px var(--sp-2); }
+  .proj-name { max-width: 32vw; }
+  .proj-menu { position: fixed; left: var(--sp-3); right: var(--sp-3); top: 60px; transform: none; width: auto; }
+  /* MapTools mulai dari atas karena tak ada analysis bar di mobile */
+  .app--mobile .map-tools { top: 12px; }
+  /* Legend jangan makan layar */
+  .map-legend { max-width: 44vw; max-height: 32%; }
+}
+
+/* Layar sangat kecil (HP kompak) */
+@media (max-width: 400px) {
+  .m-sheet { height: 62vh; }
+  .brand b svg { display: none; }
+}

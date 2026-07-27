@@ -15,9 +15,11 @@ import AdminUsers from "./components/AdminUsers";
 import SharedView from "./components/SharedView";
 import Login from "./components/Login";
 import AnalysisBar from "./components/AnalysisBar";
+import MobileShell from "./components/MobileShell";
 import { api } from "./api";
 import { supabase } from "./supabase";
 import { useMapStore } from "./store/mapStore";
+import { useIsMobile } from "./useMediaQuery";
 import { listProjects, type Project } from "./projects";
 import { AuthProvider, fetchMyRole } from "./auth";
 import type { BlockCollection, Summary } from "./types";
@@ -44,6 +46,9 @@ export default function App() {
   // Konfigurasi inset dari store peta.
   const insetsEnabled = useMapStore((s) => s.insetsEnabled);
   const insets = useMapStore((s) => s.insets);
+
+  // Layout: HP/tablet-portrait → mobile shell; selebihnya → workspace panel.
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     // Check initial auth state
@@ -137,7 +142,7 @@ export default function App() {
 
   return (
     <AuthProvider value={{ isAdmin, role }}>
-    <div className="app">
+    <div className={`app${isMobile ? " app--mobile" : ""}`}>
       <header className="header">
         <div className="brand">
           <b>
@@ -161,7 +166,7 @@ export default function App() {
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           {summary && (
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+            <div className="header-kpis" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontFamily: 'var(--font-data)', fontSize: 'var(--text-md)', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
                   {summary.total_area_ha} ha
@@ -207,6 +212,21 @@ export default function App() {
         />
       )}
 
+      {isMobile ? (
+        <MobileShell
+          data={data}
+          summary={summary}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          projects={projects}
+          projectId={projectId}
+          isAdmin={isAdmin}
+          error={error}
+          onMapLoad={setMainMap}
+          onBlocksImported={() => { reloadProjects(); reloadData(); }}
+        />
+      ) : (
+      <>
       {/* Analysis toolbar — admin only (menulis hasil ke DB) */}
       {isAdmin && <AnalysisBar projectId={projectId} />}
 
@@ -300,6 +320,8 @@ export default function App() {
 
         </PanelGroup>
       </div>
+      </>
+      )}
     </div>
     </AuthProvider>
   );

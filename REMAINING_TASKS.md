@@ -14,6 +14,22 @@
 
 ## 🟡 Todo (prioritas)
 
+- [ ] **Mobile/PWA + Raster mandiri + Data global (pengganti GEE)** — roadmap disepakati user.
+  Urutan: A1 → B1 → C1 → A2 → B2 → C2 → C3 → C4.
+  - ✅ **A1 Responsif SELESAI** (terverifikasi geometri di 375/768/1280px): `useMediaQuery`
+    (`useIsMobile`, breakpoint ≤860px), `MobileShell` (peta layar-penuh + tab bar bawah
+    Peta/Layer/Analisis) + `MobileSheet` (bottom-sheet fixed, setengah↔penuh, tutup). Reuse
+    komponen desktop (MapView/LeftPanel/UserPanel/BottomPanel/AnalysisBar). Header ringkas
+    (KPI & subjudul disembunyikan). `viewport-fit=cover` + `theme-color`. Desktop tak berubah.
+    Catatan: sheet & tab bar `position:fixed` (menghindari shell ter-scroll saat sheet buka).
+  - [ ] **A2 PWA installable** — `vite-plugin-pwa` (manifest + service worker cache app-shell/basemap).
+  - [ ] **B1 Infra COG** — bucket Storage `rasters` (RLS admin-write/member-read) + tabel
+    `raster_layers` + `maplibre-cog-protocol` → raster source di peta + legend.
+  - [ ] **C1 Hujan & suhu** — fetcher Open-Meteo/NASA POWER per centroid blok → `eo_readings`.
+  - [ ] **B2 Upload GeoTIFF** — mode "Raster (COG)" di UploadTab (validasi COG, unggah Storage).
+  - [ ] **C2 Tanah (SoilGrids)** · **C3 DEM+drainase (TWI/HAND)** · **C4 NDVI (STAC Sentinel-2)**.
+
+
 - [ ] **#3 RBAC admin vs user (produksi)** — lihat [AUDIT_RBAC.md](AUDIT_RBAC.md).
   Keputusan: Edge Function utk buat user · shell kondisional · auto-assign Demo ke `user`.
   - ✅ **Fase 1 SELESAI** (applied ke DB live + verified): `project_members` + `is_admin()`/
