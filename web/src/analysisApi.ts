@@ -11,18 +11,25 @@ import type {
 
 // ── Reference Layers ─────────────────────────────────────────────────────────
 
-export interface RefLayerMeta {
+// PENTING: RPC `list_reference_layers` mengembalikan kunci snake_case (lihat
+// migrasi 20260708000000_layer_management.sql) — sama seperti seluruh RPC lain
+// di proyek ini. Tipe di bawah sengaja mencerminkan bentuk WIRE apa adanya;
+// konversi ke camelCase dilakukan sekali saat mapping. Membaca `r.layerRole`
+// dari payload snake_case dulu membuat seluruh metadata jadi undefined sehingga
+// reference layer turun pangkat jadi layer "db" biasa dan Run Analysis tak
+// pernah bisa aktif.
+export interface RefLayerRow {
   id: string;
   name: string;
-  layerRole: string;
-  diagnosticField: string | null;
-  periodLabel: string | null;
-  periodDate: string | null;
-  layerGroup: string | null;
-  layerConfig: { classes?: LayerClass[]; weight?: number } | null;
-  featureCount: number;
-  projectId: string | null;
-  createdAt: string;
+  layer_role: string;
+  diagnostic_field: string | null;
+  period_label: string | null;
+  period_date: string | null;
+  layer_group: string | null;
+  layer_config: { classes?: LayerClass[]; weight?: number } | null;
+  feature_count: number;
+  project_id: string | null;
+  created_at: string;
 }
 
 /** List semua reference layers (dengan metadata lengkap) */
@@ -33,16 +40,16 @@ export async function listReferenceLayers(projectId?: string): Promise<Available
   });
   if (error) { console.warn("listReferenceLayers:", error.message); return []; }
 
-  return ((data as RefLayerMeta[]) ?? []).map((r) => ({
+  return ((data as RefLayerRow[]) ?? []).map((r) => ({
     id:             `ref-${r.id}`,
     name:           r.name,
     group:          "db" as const,
     sourceRef:      r.id,
-    layerRole:      r.layerRole,
-    diagnosticField: r.diagnosticField ?? undefined,
-    periodLabel:    r.periodLabel ?? undefined,
-    layerGroup:     r.layerGroup ?? undefined,
-    layerConfig:    r.layerConfig ?? undefined,
+    layerRole:      r.layer_role,
+    diagnosticField: r.diagnostic_field ?? undefined,
+    periodLabel:    r.period_label ?? undefined,
+    layerGroup:     r.layer_group ?? undefined,
+    layerConfig:    r.layer_config ?? undefined,
   }));
 }
 
