@@ -9,8 +9,10 @@ import UserPanel from "./UserPanel";
 import BottomPanel from "./BottomPanel";
 import AnalysisBar from "./AnalysisBar";
 import MobileSheet from "./MobileSheet";
+import BlockPanel from "./BlockPanel";
+import LoadingOverlay from "./LoadingOverlay";
 import type { Project } from "../projects";
-import type { BlockCollection, Summary } from "../types";
+import type { BlockCollection, BlockFeature, Summary } from "../types";
 
 type Tab = "map" | "panel" | "analysis";
 
@@ -18,6 +20,7 @@ interface Props {
   data: BlockCollection | null;
   summary: Summary | null;
   selectedId: string | null;
+  selectedFeature: BlockFeature | null;
   onSelect: (id: string) => void;
   projects: Project[];
   projectId: string | null;
@@ -33,7 +36,7 @@ interface Props {
  * UserPanel, BottomPanel, AnalysisBar) — hanya penataannya yang berbeda.
  */
 export default function MobileShell({
-  data, summary, selectedId, onSelect, projects, projectId,
+  data, summary, selectedId, selectedFeature, onSelect, projects, projectId,
   isAdmin, error, onMapLoad, onBlocksImported,
 }: Props) {
   const [tab, setTab] = useState<Tab>("map");
@@ -61,6 +64,7 @@ export default function MobileShell({
         <MapTools />
         <BasemapSwitcher />
         <FloatingLegend />
+        {!data && !error && <LoadingOverlay />}
         {error && <div className="m-map-error">API error: {error}</div>}
       </div>
 
@@ -88,6 +92,8 @@ export default function MobileShell({
         onClose={closeSheet}
       >
         {isAdmin && <AnalysisBar projectId={projectId} />}
+        {/* Detail blok terpilih tampil lebih dulu — itu yang dicari di lapangan. */}
+        {selectedFeature && <BlockPanel feature={selectedFeature} embedded />}
         <BottomPanel data={data} selectedId={selectedId} onSelect={onSelect} />
       </MobileSheet>
 

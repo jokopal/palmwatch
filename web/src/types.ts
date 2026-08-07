@@ -2,13 +2,17 @@
 
 export type PriorityLevel = "critical" | "warning" | "monitor" | "normal";
 
+// Bentuk yang benar-benar ditulis overlay engine (overlay.py INTERVENTION_MATRIX):
+// {intervention, label, priority, lag_weeks_min, lag_weeks_max, literature}.
+// `type` & `effort_score` hanya ada pada data sample lama, jadi opsional.
 export interface Intervention {
-  type: string;
+  intervention?: string;
+  type?: string;
   label: string;
   priority: number;
   lag_weeks_min: number;
   lag_weeks_max: number;
-  effort_score: number;
+  effort_score?: number;
   literature: string;
 }
 
@@ -28,6 +32,20 @@ export interface BlockProperties {
   rainfall_90d_mm: number;
   soil_ph: number;
   soil_soc: number;
+  // Ditambahkan migrasi 20260711000000 — hasil Track C yang sebelumnya tak
+  // pernah sampai ke UI. Opsional: blok tanpa data pipeline tetap valid.
+  temp_2m_mean?: number | null;
+  et_stress_ratio?: number | null;
+  soil_moisture?: number | null;
+  tbs_ton_ha?: number | null;
+  soil_clay?: number | null;
+  soil_sand?: number | null;
+  soil_cec?: number | null;
+  soil_nitrogen?: number | null;
+  /** Tanggal observasi EO terakhir (lintas source). */
+  eo_last_obs?: string | null;
+  /** Daftar source yang berkontribusi ke blok ini (mis. open-meteo, sentinel-2-stac). */
+  eo_sources?: string[] | null;
   conditions: string[];
   n_conditions: number;
   severity_score: number;

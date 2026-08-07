@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { BlockCollection, Timeseries } from "../types";
+import type { BlockCollection, Intervention, Timeseries } from "../types";
 import { api, PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
 import { useMapStore } from "../store/mapStore";
 import type { BlockAnalysisSummary, TableRow, AnalysisResult } from "../store/mapStore";
@@ -669,14 +669,15 @@ function BlockDetail({
         <>
           <div className="concl-section-title">Rekomendasi Intervensi ({p.n_interventions})</div>
           <div className="concl-interv-list">
-            {p.interventions.map((iv: { label: string; priority: number; lag_weeks_min: number; lag_weeks_max: number; effort_score: number; literature: string }, i: number) => (
+            {p.interventions.map((iv: Intervention, i: number) => (
               <div className="interv" key={i}>
                 <div className="top">
                   <span className="name">{iv.label}</span>
                   <span className="pri">prioritas {iv.priority}</span>
                 </div>
                 <div className="meta">
-                  Lag {iv.lag_weeks_min}-{iv.lag_weeks_max} minggu &middot; effort {iv.effort_score}
+                  Lag {iv.lag_weeks_min}-{iv.lag_weeks_max} minggu
+                  {iv.effort_score != null ? ` · effort ${iv.effort_score}` : ""}
                 </div>
                 <div className="lit">{iv.literature}</div>
               </div>

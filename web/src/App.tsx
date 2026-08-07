@@ -8,6 +8,8 @@ import MapTools from "./components/MapTools";
 import FloatingLegend from "./components/FloatingLegend";
 import LeftPanel from "./components/LeftPanel";
 import UserPanel from "./components/UserPanel";
+import BlockPanel from "./components/BlockPanel";
+import LoadingOverlay from "./components/LoadingOverlay";
 import BottomPanel from "./components/BottomPanel";
 import ProfileMenu from "./components/ProfileMenu";
 import ProjectSwitcher from "./components/ProjectSwitcher";
@@ -49,6 +51,9 @@ export default function App() {
 
   // Layout: HP/tablet-portrait → mobile shell; selebihnya → workspace panel.
   const isMobile = useIsMobile();
+
+  // Fitur blok terpilih — dipakai panel detail (desktop float & sheet mobile).
+  const selectedFeature = data?.features.find((f) => f.properties.block_id === selectedId) ?? null;
 
   useEffect(() => {
     // Check initial auth state
@@ -217,6 +222,7 @@ export default function App() {
           data={data}
           summary={summary}
           selectedId={selectedId}
+          selectedFeature={selectedFeature}
           onSelect={setSelectedId}
           projects={projects}
           projectId={projectId}
@@ -256,6 +262,16 @@ export default function App() {
                     <MapTools />
                     <BasemapSwitcher />
                     <FloatingLegend />
+
+                    {!data && !error && <LoadingOverlay />}
+
+                    {/* Detail blok terpilih — "identify" ala SIG, float di atas peta */}
+                    {selectedFeature && (
+                      <BlockPanel
+                        feature={selectedFeature}
+                        onClose={() => setSelectedId(null)}
+                      />
+                    )}
 
                     {error && (
                       <div style={{
