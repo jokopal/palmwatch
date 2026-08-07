@@ -264,10 +264,11 @@ Setiap blok panen setelah overlay menghasilkan struktur berikut:
 - **Threshold manager**: `api/domain/thresholds.py` — configurable per tenant
 - **API server**: `api/main.py` — Sentry middleware, rate limiting (slowapi), structured error handling, regression + intervention endpoints
 - **Utils package**: `utils/__init__.py`, `utils/logger.py` — JSON structured logger untuk pipeline scripts
-- **CI/CD**: `.github/workflows/ci.yml` (lint + test-backend + test-frontend + docker build), `.github/workflows/deploy.yml` (Supabase migrasi + Fly.io deploy)
+- **CI/CD**: `.github/workflows/ci.yml` (lint + test-backend + test-frontend + docker build), `.github/workflows/deploy.yml` (Supabase migrasi + Fly.io deploy), `.github/workflows/keepalive.yml`
 - **Containerization**: `Dockerfile` + `.dockerignore`
 - **Dependencies**: `pyproject.toml` (ruff, mypy, pytest), `requirements-api.txt` (production), `requirements.txt` (pipeline + API gabungan)
-- **Tests**: 32 tests, semuanya passing — `test_api.py` (10), `test_normalizer.py` (8), `test_overlay.py` (7), `test_regression.py` (7)
+- **Tests**: 61 tests, semuanya passing — `test_api.py`, `test_normalizer.py`, `test_overlay.py`, `test_regression.py`, `test_geometry.py`, `test_postgis_writer.py`, `test_overlay_keyless.py` (14)
+- **Overlay engine keyless** (2026-08-06): `run_overlay.py` menghitung `block_conditions` dari `eo_readings`+`soil_properties` tanpa GEE — inilah jalur produksi kondisi/intervensi sekarang, bukan `pipeline.py` (yang masih butuh `earthengine-api`)
 
 **Yang perlu dibangun:**
 - Pipeline GEE → PostGIS (integrasi collectors/processors/storage dengan infra baru)

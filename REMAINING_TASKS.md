@@ -2,13 +2,79 @@
 
 > File pelacak task hidup. **Diperbarui tiap ada task baru; item dihapus/dipindah ke
 > "Selesai" saat rampung.** Sumber kebenaran prioritas pengembangan.
-> Terakhir diperbarui: 2026-07-06.
+> Terakhir diperbarui: 2026-08-06.
 
 ---
 
 ## 🔵 Sedang dikerjakan
 
 - _(kosong — pilih item berikutnya dari Todo)_
+
+---
+
+## 🩹 Perbaikan 2026-08-06 (audit kode menyeluruh)
+
+Enam cacat ditemukan lewat pembacaan kode + introspeksi DB live, semuanya sudah
+diperbaiki & diverifikasi:
+
+- ✅ **Loop analitik tersambung kembali** — `run_overlay.py` (BARU): overlay engine
+  KEYLESS `eo_readings` → `block_conditions`. Sebelumnya `block_conditions` hanya
+  bisa diisi pipeline GEE/seed, sehingga blok hasil import SHP selamanya tampil
+  'normal' tanpa kondisi/intervensi. Memakai ulang `overlay.py` (threshold
+  berliteratur + matriks intervensi + composite score), agregasi lintas source,
+  carry-forward variabel lambat, dan **gate regresi** (yield hanya diisi bila
+  R²≥0,40 & p<0,05, ≥12 periode — selain itu NULL + disclaimer, bukan angka
+  karangan). 14 tes baru (`tests/test_overlay_keyless.py`). **Sudah dijalankan
+  ke DB live**: 144 baris kondisi nyata (12 blok × 12 periode 2024).
+  Catatan: pakai `--exclude-source Sentinel-2` agar NDVI seed sintetis tidak
+  tercampur dengan NDVI asli `sentinel-2-stac`.
+- ✅ **Reference layer bisa dipakai analisis lagi** — `listReferenceLayers`
+  membaca payload camelCase padahal RPC mengembalikan snake_case, sehingga SEMUA
+  metadata jadi `undefined`, layer turun pangkat jadi kind `db`, dan tombol
+  **Run Analysis** tak pernah bisa aktif. Diperbaiki di `web/src/analysisApi.ts`.
+- ✅ **Agregasi EO lintas source** — migrasi `20260711000000_eo_aggregate.sql`:
+  `_blocks_fc` kini mengambil nilai terbaru non-null **per variabel**, bukan satu
+  baris terbaru. Sebelumnya NDVI selalu NULL di peta/tabel/share karena baris
+  open-meteo (bulanan) menimpa baris sentinel-2 (kuartalan). Verified: 12/12 blok
+  kini punya `ndvi_value`. Sekaligus mengekspos `temp_2m_mean`, tekstur tanah,
+  `eo_last_obs`, dan `eo_sources` (provenance) ke UI.
+- ✅ **Panel detail blok hidup** — `BlockPanel.tsx` selama ini **dead code** (tak
+  diimpor dari mana pun), sehingga hasil SoilGrids/C2 tak pernah terlihat.
+  Ditulis ulang & dipasang: float di atas peta (desktop) + di dalam sheet
+  Analisis (mobile), lengkap dengan provenance data, label kondisi berbahasa
+  lapangan, intervensi + lag effect, proyeksi yield ber-gate, dan tren temporal.
+- ✅ **Sisa lubang RBAC ditutup** — migrasi `20260712000000_rbac_phase1c.sql`.
+  AUDIT_RBAC C.4 mewajibkan semua DEFINER RPC dihardening, tapi RPC dari
+  `20260708000000_layer_management.sql` terlewat total (timestamp-nya lebih baru
+  dari migrasi RBAC). Kini: `run_layer_analysis`/`save_analysis_result`/
+  `upsert_production_data` = admin-only; `list_reference_layers`/
+  `list_temporal_layers`/`list_analysis_results` = member-scoped + anon dicabut;
+  RLS `production_data`/`analysis_results` tidak lagi `using (true)` untuk anon.
+  **Catatan penting**: `revoke ... from anon` saja tidak cukup — `CREATE FUNCTION`
+  memberi EXECUTE ke role `PUBLIC` dan anon mewarisinya; harus `revoke from
+  public, anon`. Verified 15/15 probe (anon/user/admin) + idempoten.
+- ✅ **`upsert_production_data` benar-benar upsert** — dulu `on conflict do
+  nothing` tanpa constraint unik apa pun, jadi cabang UPDATE tak pernah jalan dan
+  tiap unggah Excel menumpuk duplikat. Ditambah `unique (project_id, name)`.
+- ✅ **Repo bersih kelas-F (ruff)** — 31 impor/variabel mati dibuang, sehingga
+  step `ruff check api/ tests/` di CI yang sudah ada lebih bermakna. (Sisa ~180
+  pelanggaran GAYA di modul pipeline root — UP/I/N — belum disentuh.)
+  Catatan: CI GitHub Actions **sudah ada sejak lama** (`ci.yml`, `deploy.yml`,
+  `keepalive.yml`); item backlog "CI GitHub Actions" di bawah sebenarnya sudah
+  rampung, bukan pekerjaan baru.
+- ✅ **Loading skeleton** — `LoadingOverlay.tsx`; peta tak lagi tampil kosong
+  tanpa penjelasan selagi `blocks_geojson` dimuat.
+
+### ⚠️ Temuan yang WAJIB diketahui sesi berikutnya
+
+**DB live pernah menyimpang jauh dari folder migrasi.** Introspeksi 2026-08-06
+menemukan `20260708000000_layer_management.sql` **tidak pernah diterapkan**:
+tabel `production_data`/`analysis_results` tidak ada, `vector_layers` tak punya
+kolom `layer_role`/`diagnostic_field`/`layer_config`, dan seluruh RPC layer
+management (`run_layer_analysis`, `save_analysis_result`, `list_reference_layers`,
+…) tidak ada. Artinya fitur "Layer Management System" (commit `aacb685`) selama
+berbulan-bulan hanya hidup di kode. Sudah diterapkan sekarang.
+→ **Jangan percaya folder migrasi sebagai gambaran DB live. Introspeksi dulu.**
 
 ---
 
@@ -102,11 +168,23 @@
   account (pilih "Data aplikasi") lalu `python run_gee.py --project <uuid> --start … --end …`
   → NDVI/LST/hujan asli (di-mask batas blok project) ke Supabase.
 - [ ] **Render raster GEE** di peta (kini GEE hanya list/legend — butuh tile pipeline).
-- [ ] **Loading skeleton** (Error Boundary ✅ selesai).
-- [ ] **CI GitHub Actions** (lint + test tiap push).
+- [x] ~~Loading skeleton~~ — selesai 2026-08-06 (`LoadingOverlay.tsx`).
+- [x] ~~CI GitHub Actions~~ — ternyata sudah ada sejak lama di
+  `.github/workflows/` (ci + deploy + keepalive); item ini basi, bukan pekerjaan
+  tertunda.
 - [ ] 🔴 **Rotasi kredensial** yang sempat bocor: DB password `pakuntungpeduli123` +
   service_role/secret key. Setelah rotasi: update `.env`, `web/.env.local`,
-  `web/src/config.ts`, env Netlify.
+  `web/src/config.ts`, env Netlify. **Hanya bisa dikerjakan pemilik project.**
+- [ ] **Bersihkan data seed sintetis** di `eo_readings` (`source='Sentinel-2'`,
+  36 baris) agar tidak tercampur observasi nyata. Sementara ini disiasati lewat
+  `run_overlay.py --exclude-source Sentinel-2`.
+- [ ] **Backlog gaya ruff** (~180 UP/I/N/E) — non-blocking di CI; kikis bertahap.
+- [ ] **Verifikasi visual BlockPanel** perlu sesi login (admin/user). Jalur share
+  publik sudah terverifikasi di browser (12 blok, 7 kritis, 0 error konsol).
+- [ ] **Drainase belum pernah memicu intervensi**: aturan `high_twi`/`high_slope`
+  butuh kolom `twi_approx`/`slope_deg` yang belum ada di `eo_readings`. Slope
+  sudah dihitung `run_dem.py` sebagai raster — perlu zonal-stats ke tabel agar
+  intervensi drainase (Paramananthan 2000) bisa aktif.
 
 ---
 
