@@ -30,15 +30,14 @@ PARAMETER YANG DIAKUISISI:
 
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 import ee
-import numpy as np
 import pandas as pd
 import geopandas as gpd
 
 from utils.logger import get_logger
-from utils.geometry import gdf_to_ee_featurecollection, bbox_from_gdf
+from utils.geometry import gdf_to_ee_featurecollection
 
 log = get_logger("gee_collector")
 

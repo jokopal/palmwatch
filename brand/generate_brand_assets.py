@@ -20,7 +20,6 @@ Jalankan:  python brand/generate_brand_assets.py
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont

@@ -33,7 +33,6 @@ from .domain.schemas import (
 )
 from .infrastructure.regression import (
     validate_regression,
-    validate_multiple_variables,
 )
 
 configure_logging()

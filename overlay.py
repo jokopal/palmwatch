@@ -20,7 +20,7 @@ TIPE OVERLAY:
 3. Composite score : Weighted sum semua kondisi untuk priority ranking
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import geopandas as gpd
 import numpy as np
@@ -349,8 +349,9 @@ def compute_composite_score(
         return df
 
     df_out = df.copy()
+    # Skor mentah tak perlu dibagi total bobot — hasilnya dinormalisasi min-max
+    # ke 0-100 di bawah, sehingga skalanya sudah sebanding antar-run.
     score = pd.Series(0.0, index=df_out.index)
-    total_weight = sum(abs(v) for v in available_cols.values())
 
     for col, weight in available_cols.items():
         score += df_out[col].fillna(0.5) * weight

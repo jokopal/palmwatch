@@ -26,7 +26,6 @@ Data lama di-overwrite untuk periode yang sama (UPSERT di PostGIS).
 """
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -46,7 +45,7 @@ from gee_collector import (
 )
 from chirps_collector import get_chirps_via_gee
 from soilgrids_collector import get_soilgrids_for_blocks
-from normalizer import normalize_pipeline, DYNAMIC_VARS, STATIC_VARS
+from normalizer import normalize_pipeline
 from overlay import tag_conditions, lookup_interventions, compute_composite_score
 from postgis_writer import (
     init_schema,
@@ -92,7 +91,7 @@ def run_phase1(
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     summary = {"tenant_id": tenant_id, "start_date": start_date, "end_date": end_date}
 
-    log.info(f"=== PalmWatch Fase 1 Pipeline ===")
+    log.info("=== PalmWatch Fase 1 Pipeline ===")
     log.info(f"Tenant  : {tenant_id}")
     log.info(f"Periode : {start_date} - {end_date}")
     log.info(f"Blok    : {blocks_path or '(GeoDataFrame)'}")
@@ -201,7 +200,7 @@ def run_phase1(
     output_files = _export_results(gdf, df_scored, df_normalized, output_dir, start_date, end_date)
     summary["output_files"] = output_files
 
-    log.info(f"=== Pipeline selesai ===")
+    log.info("=== Pipeline selesai ===")
     log.info(f"Output: {output_files}")
     return summary
 
@@ -226,8 +225,6 @@ def _merge_all_datasets(
 
     if merged.empty:
         return pd.DataFrame()
-
-    date_col = "period_start" if "period_start" in merged.columns else "date"
 
     # Agregasi LAI, LST, ET per periode NDVI (16-hari)
     for df_right, right_cols in [

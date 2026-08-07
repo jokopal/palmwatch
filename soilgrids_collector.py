@@ -39,7 +39,6 @@ import time
 from typing import Dict, List, Optional
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 import requests
 from retry import retry
@@ -276,7 +275,6 @@ def get_soilgrids_wcs_raster(
     Returns:
         Path file GeoTIFF yang didownload
     """
-    import os
     from pathlib import Path
 
     minx, miny, maxx, maxy = bbox

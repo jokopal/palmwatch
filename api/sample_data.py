@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import random
-from datetime import date, timedelta
+from datetime import date
 from typing import Dict, List
 
 # Titik acuan pilot (Kalimantan Timur, sama dengan blocks_example.geojson)

@@ -12,10 +12,9 @@ Module ini digunakan untuk:
 """
 
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 import rasterio
 from rasterstats import zonal_stats

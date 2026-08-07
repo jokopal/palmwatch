@@ -29,10 +29,9 @@ Pipeline menghitung akumulasi 30, 60, dan 90 hari secara otomatis.
 Ini penting untuk deteksi defisit air kumulatif pada sawit.
 """
 
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List
 
 import geopandas as gpd
 import numpy as np
@@ -75,7 +74,9 @@ def get_chirps_via_gee(
     """
     try:
         import ee
-        from gee_collector import init_gee, _zonal_stats_ee
+        # _zonal_stats_ee sengaja diimpor untuk memastikan modul GEE lengkap
+        # sebelum lanjut (probe ketersediaan), bukan untuk dipakai langsung.
+        from gee_collector import init_gee, _zonal_stats_ee  # noqa: F401
         from utils.geometry import gdf_to_ee_featurecollection
     except ImportError:
         log.error("earthengine-api tidak terinstall. Gunakan get_chirps_via_http() sebagai fallback.")
@@ -170,8 +171,6 @@ def get_chirps_via_http(
     end = datetime.strptime(end_date, "%Y-%m-%d")
     dates = [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
-    # Bounding box untuk crop raster
-    bounds = gdf.total_bounds  # minx, miny, maxx, maxy
     geometries = [mapping(geom) for geom in gdf.geometry]
     block_ids = gdf["block_id"].tolist()
 

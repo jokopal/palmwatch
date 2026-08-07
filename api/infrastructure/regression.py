@@ -20,10 +20,8 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from scipy import stats
-from statsmodels.regression.linear_model import OLS, WLS, WLS
+from statsmodels.regression.linear_model import OLS, WLS
 from statsmodels.tools import add_constant
-from sklearn.metrics import r2_score
 
 from api.core.logging import get_logger
 
