@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { BlockFeature, Timeseries } from "../types";
-import { api, PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
+import { api, priorityColor, priorityLabel } from "../api";
 import TimeSeriesChart from "./TimeSeriesChart";
 
 interface Props {
@@ -68,6 +68,10 @@ export default function BlockPanel({ feature, onClose, embedded = false }: Props
   if (!feature) return null;
 
   const p = feature.properties;
+  // Sumber kebenaran "sudah dianalisis": ada tidaknya baris block_conditions.
+  // Jangan menyimpulkannya dari n_conditions === 0 — nol kondisi pada blok yang
+  // sudah diperiksa berarti sehat, dan itu hal yang berbeda.
+  const hasAnalysis = p.has_conditions ?? (p.priority_level != null);
   const hasBaseline = p.yield_baseline_ton_ha != null;
   const hasProjection = p.yield_predicted_after_intervention != null;
   const r2 = p.regression_r2;
@@ -101,9 +105,21 @@ export default function BlockPanel({ feature, onClose, embedded = false }: Props
       </div>
 
       <div className="bd-body">
-        <span className="badge" style={{ background: PRIORITY_COLOR[p.priority_level] }}>
-          {PRIORITY_LABEL[p.priority_level]} · skor {p.severity_score}
+        <span className="badge" style={{ background: priorityColor(p.priority_level) }}>
+          {priorityLabel(p.priority_level)}{p.severity_score != null ? ` · skor ${p.severity_score}` : ""}
         </span>
+
+        {/* Blok yang belum pernah dianalisis harus mengatakannya. Tanpa ini,
+            panel menampilkan angka kosong dan kalimat "tidak ada kondisi
+            kritis" — terbaca sebagai hasil pemeriksaan, padahal belum ada
+            pemeriksaan sama sekali. */}
+        {!hasAnalysis && (
+          <div className="bd-nodata">
+            Blok ini <b>belum pernah dianalisis</b>. Angka di bawah diambil
+            langsung dari data mentah bila tersedia; status kesehatan dan
+            rekomendasi belum dapat disimpulkan.
+          </div>
+        )}
 
         {/* Provenance — dari mana angka ini berasal */}
         {(p.eo_last_obs || p.eo_sources?.length) && (
@@ -151,7 +167,11 @@ export default function BlockPanel({ feature, onClose, embedded = false }: Props
             ))}
           </div>
         ) : (
-          <div className="bd-note">Tidak ada kondisi kritis terdeteksi pada periode ini.</div>
+          <div className="bd-note">
+            {hasAnalysis
+              ? "Tidak ada kondisi kritis terdeteksi pada periode ini."
+              : "Belum ada hasil analisis untuk blok ini."}
+          </div>
         )}
 
         {/* Intervensi */}

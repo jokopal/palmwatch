@@ -18,7 +18,12 @@ export interface SharedProject {
   project: { id: string; name: string; estate?: string | null; description?: string | null };
   summary: Summary;
   blocks: BlockCollection;
-  vectorLayers?: (AvailableLayer & { geojson?: GeoJSON.FeatureCollection })[];
+  /**
+   * Metadata layer vektor — TANPA geojson. Total geojson project bisa belasan
+   * MB (satu layer garis 9 MB, dua layer titik 12.359 fitur), jadi isinya
+   * diambil per layer lewat getSharedLayerGeojson() sesuai kebutuhan.
+   */
+  vectorLayers?: (AvailableLayer & { nFeatures?: number })[];
   rasterLayers?: AvailableLayer[];
 }
 
@@ -85,7 +90,7 @@ export async function getSharedProject(token: string): Promise<SharedProject | n
       diagnostic_field: string | null;
       period_label: string | null;
       layer_config: { classes?: unknown; weight?: unknown } | null;
-      geojson: GeoJSON.FeatureCollection | null;
+      n_features: number | null;
     }>;
     raster_layers?: Array<{
       id: string;
@@ -118,7 +123,7 @@ export async function getSharedProject(token: string): Promise<SharedProject | n
         diagnosticField: r.diagnostic_field ?? undefined,
         periodLabel: r.period_label ?? undefined,
         layerConfig: r.layer_config as never ?? undefined,
-        geojson: r.geojson ?? undefined,
+        nFeatures: r.n_features ?? undefined,
       };
     });
   }
@@ -131,49 +136,9 @@ export async function getSharedProject(token: string): Promise<SharedProject | n
       .filter((x): x is AvailableLayer => Boolean(x));
   }
 
-  // Fallback ke kueri tabel bila RPC lama belum mengembalikan vector/raster_layers
-  if (!result.vectorLayers && raw.project?.id) {
-    try {
-      const { data: vData } = await supabase
-        .from("vector_layers")
-        .select("id, name, layer_role, diagnostic_field, period_label, layer_config, geojson")
-        .or(`project_id.eq.${raw.project.id},project_id.is.null`)
-        .order("created_at", { ascending: false });
-
-      if (vData) {
-        result.vectorLayers = vData.map((r) => {
-          const isRef = r.layer_role === "reference";
-          return {
-            id: isRef ? `ref-${r.id}` : `db-${r.id}`,
-            name: r.name,
-            group: "db" as const,
-            sourceRef: r.id,
-            layerRole: r.layer_role,
-            diagnosticField: r.diagnostic_field ?? undefined,
-            periodLabel: r.period_label ?? undefined,
-            layerConfig: r.layer_config ?? undefined,
-            geojson: r.geojson as GeoJSON.FeatureCollection ?? undefined,
-          };
-        });
-      }
-    } catch { /* ignore fallback errors */ }
-  }
-
-  if (!result.rasterLayers && raw.project?.id) {
-    try {
-      const { data: rData } = await supabase
-        .from("raster_layers")
-        .select("name")
-        .or(`project_id.eq.${raw.project.id},project_id.is.null`)
-        .order("created_at", { ascending: false });
-
-      if (rData) {
-        result.rasterLayers = rData
-          .map((r) => overlayForName(r.name))
-          .filter((x): x is AvailableLayer => Boolean(x));
-      }
-    } catch { /* ignore fallback errors */ }
-  }
+  // Tidak ada lagi fallback kueri tabel langsung: pengunjung share tidak login,
+  // sehingga RLS selalu menolaknya dengan 401 dan halaman jadi tampak rusak.
+  // shared_project() (SECURITY DEFINER) adalah satu-satunya jalur yang sah.
 
   return result;
 }
@@ -197,4 +162,27 @@ export async function importProjectBlocks(
 /** Bangun URL share publik untuk sebuah token. */
 export function shareUrl(token: string): string {
   return `${window.location.origin}/?share=${token}`;
+}
+
+/**
+ * Ambil geojson satu layer untuk pengunjung share publik.
+ *
+ * Token divalidasi ulang di sisi database dan layer wajib milik project yang
+ * dibuka token itu, jadi mengetahui satu token tidak memberi akses ke layer
+ * project lain.
+ */
+export async function getSharedLayerGeojson(
+  token: string,
+  layerId: string,
+): Promise<GeoJSON.FeatureCollection | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("shared_layer_geojson", {
+    p_token: token,
+    p_layer_id: layerId,
+  });
+  if (error) {
+    console.warn("getSharedLayerGeojson:", error.message);
+    return null;
+  }
+  return (data as GeoJSON.FeatureCollection) ?? null;
 }

@@ -111,6 +111,52 @@ tidak dikenal library, dan URL-nya relatif.
 
 ---
 
+## 📊 Fase D — Empty state jujur & poles preview (SELESAI)
+
+Migrasi `20260716000000_phase_d_no_data_state.sql`:
+
+- ✅ **"Belum ada data" ≠ "Sehat".** `coalesce(c.priority_level,'normal')`
+  membuat blok yang belum pernah dianalisis terhitung sehat — header
+  menampilkan "5 sehat" untuk kebun yang belum diperiksa sama sekali. Kini
+  `priority_level` NULL bila tak ada kondisi, ditambah flag `has_conditions`,
+  dan summary punya ember `no_data` + `n_analyzed` terpisah.
+- ✅ `mean_regression_r2` jadi NULL, bukan 0 — rata-rata himpunan kosong
+  bukanlah nol.
+- ✅ `tenant_id` yang di-hardcode `'demo'` diganti nama project sebenarnya.
+- ✅ **Filter `priority=no_data`** untuk menyaring blok yang belum dianalisis.
+
+Sisi tampilan:
+
+- ✅ Palet & label: `no_data` → abu netral `#94A3B8`, "Belum ada data".
+  Helper `priorityColor()` / `priorityLabel()` menerima null sehingga tidak ada
+  lagi tempat yang bisa lupa menanganinya.
+- ✅ **`fillColorExpr` memakai `coalesce`** — MapLibre `match` tidak bisa
+  mencocokkan null, jadi blok tanpa data dulu jatuh ke warna fallback hijau
+  tua alias tampak sehat. Sekarang abu.
+- ✅ Header, share view, UserPanel, dan panel detail blok memakai keadaan
+  "belum dianalisis" alih-alih angka yang menyesatkan.
+
+Perbaikan yang ditemukan saat mengerjakan fase ini:
+
+- ✅ **Share publik tidak pernah menampilkan layer.** `shared_project` hanya
+  mengembalikan project/summary/blok, lalu frontend jatuh ke kueri tabel
+  langsung yang selalu ditolak (401) karena pengunjung tidak login. RPC kini
+  menyertakan daftar layer, dan fallback kueri tabel dibuang.
+- ✅ **Payload share 15 MB → 14 KB.** Percobaan pertama menyematkan seluruh
+  geojson dan membuat halaman menggantung (satu layer garis 9 MB, dua layer
+  titik 12.359 fitur). Kini `shared_project` mengirim metadata + jumlah fitur,
+  dan `shared_layer_geojson(token, layer_id)` mengambil per layer — token
+  divalidasi ulang di sana agar satu token tidak membuka layer project lain.
+  Layer ≤ 2.000 fitur dimuat otomatis, sisanya lewat tombol **Muat**.
+- ✅ **Duplikat layer.** Penjaga anti-duplikat di `addDbLayer` menuntut
+  `kind === "db"`, padahal reference layer ber-kind `"reference"` — memanggilnya
+  dua kali menambahkan layer yang sama dua kali.
+- ✅ **`setLayerVisible` / `setLayerLocked` idempoten.** Alur setup memakai
+  `toggleLayerVisible`; effect React yang berjalan dua kali membalik nilainya
+  kembali, sehingga 17 raster yang seharusnya mati justru menyala menumpuk.
+
+---
+
 ## 🧹 Fase C — Data nyata, demo dibuang (SELESAI)
 
 Backup penuh dibuat lebih dulu: `python scripts/backup_db.py --label sebelum-hapus-demo`

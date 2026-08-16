@@ -208,7 +208,9 @@ function defaultBlocksSymbology(): Symbology {
     stroke: "#ffffff",
     strokeWidth: 1,
     categoryField: "priority_level",
-    categories: (["critical", "warning", "monitor", "normal"] as const).map((k) => ({
+    // "no_data" wajib ada: blok tanpa baris block_conditions punya
+    // priority_level null dan harus terlihat abu, bukan hijau sehat.
+    categories: (["critical", "warning", "monitor", "normal", "no_data"] as const).map((k) => ({
       value: k,
       color: PRIORITY_COLOR[k],
       label: PRIORITY_LABEL[k],
@@ -368,6 +370,16 @@ export const mapStore = {
   toggleLayerLock: (id: string) =>
     set({ activeLayers: state.activeLayers.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l)) }),
 
+  // Setter eksplisit — WAJIB dipakai dari dalam effect atau alur setup.
+  // Toggle tidak idempoten: effect React yang berjalan dua kali (StrictMode,
+  // atau remount) akan membalik nilainya kembali, sehingga layer yang
+  // seharusnya tersembunyi/terkunci justru kembali seperti semula.
+  setLayerVisible: (id: string, visible: boolean) =>
+    set({ activeLayers: state.activeLayers.map((l) => (l.id === id ? { ...l, visible } : l)) }),
+
+  setLayerLocked: (id: string, locked: boolean) =>
+    set({ activeLayers: state.activeLayers.map((l) => (l.id === id ? { ...l, locked } : l)) }),
+
   removeLayer: (id: string) => {
     const target = state.activeLayers.find((l) => l.id === id);
     if (target?.locked) return;
@@ -410,7 +422,11 @@ export const mapStore = {
   },
 
   addDbLayer: (a: AvailableLayer, geojson: GeoJSON.FeatureCollection) => {
-    if (state.activeLayers.some((l) => l.sourceRef === a.sourceRef && l.kind === "db")) return;
+    // Cegah duplikat berdasarkan sourceRef saja. Dulu penjaga ini ikut menuntut
+    // kind === "db", padahal layer reference ber-kind "reference" — sehingga
+    // memanggil addDbLayer dua kali untuk layer yang sama (mis. effect React
+    // yang berjalan ganda) menambahkannya dua kali ke daftar.
+    if (a.sourceRef && state.activeLayers.some((l) => l.sourceRef === a.sourceRef)) return;
     const id = `layer-${a.id}-${Date.now()}`;
     const isRef = a.layerRole === "reference";
     const kind: LayerKind = isRef ? "reference" : "db";

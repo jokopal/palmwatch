@@ -219,17 +219,17 @@ export default function App() {
                 <div style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Blok</div>
               </div>
               {(summary.by_priority?.critical ?? 0) > 0 && (
-                <div style={{
-                  background: 'rgba(192,57,43,0.25)',
-                  border: '1px solid rgba(192,57,43,0.5)',
-                  borderRadius: 'var(--r-pill)',
-                  padding: '3px 10px',
-                  fontFamily: 'var(--font-data)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 700,
-                  color: '#f5a09a',
-                }}>
+                <div className="hdr-pill hdr-pill--crit">
                   {summary.by_priority.critical} Kritis
+                </div>
+              )}
+              {/* Blok tanpa analisis ditandai terpisah. Sebelumnya mereka
+                  terhitung "normal" sehingga kebun yang belum pernah
+                  dianalisis tampil sebagai sehat sepenuhnya. */}
+              {(summary.by_priority?.no_data ?? 0) > 0 && (
+                <div className="hdr-pill hdr-pill--nodata"
+                  title="Blok ini belum punya data kondisi — statusnya belum diketahui, bukan sehat">
+                  {summary.by_priority.no_data} belum dianalisis
                 </div>
               )}
             </div>

@@ -49,12 +49,25 @@ export const PRIORITY_COLOR: Record<string, string> = {
   warning:  "#D97706",   // amber profesional - peringatan
   monitor:  "#CA8A04",   // kuning-gelap - pantau
   normal:   "#5FA83F",   // Canopy Green (Direction B) - sehat/optimal
+  no_data:  "#94A3B8",   // abu netral - belum dianalisis, BUKAN sehat
 };
+
+/**
+ * Ember status untuk sebuah blok. `null` (belum pernah dianalisis) dipetakan
+ * ke "no_data" — bukan ke "normal". Semua tempat yang menampilkan status wajib
+ * lewat sini supaya tidak ada lagi yang melaporkan blok tanpa data sebagai sehat.
+ */
+export function priorityBucket(p: string | null | undefined): string {
+  return p ?? "no_data";
+}
+export const priorityColor = (p: string | null | undefined) => PRIORITY_COLOR[priorityBucket(p)];
+export const priorityLabel = (p: string | null | undefined) => PRIORITY_LABEL[priorityBucket(p)];
 
 export const PRIORITY_LABEL: Record<string, string> = {
   critical: "Kritis",
   warning:  "Peringatan",
   monitor:  "Pantau",
   normal:   "Sehat",
+  no_data:  "Belum ada data",
 };
 

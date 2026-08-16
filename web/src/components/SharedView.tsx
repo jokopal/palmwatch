@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import MapView from "./MapView";
 import BasemapSwitcher from "./BasemapSwitcher";
 import FloatingLegend from "./FloatingLegend";
-import { getSharedProject, type SharedProject } from "../projects";
+import { getSharedProject, getSharedLayerGeojson, type SharedProject } from "../projects";
 import { mapStore, useMapStore } from "../store/mapStore";
-import { PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
+import { PRIORITY_COLOR, PRIORITY_LABEL, priorityColor, priorityLabel } from "../api";
 import { zoomToLayer } from "../map/zoomToLayer";
 
 // Tampilan publik read-only untuk pengguna via share link (?share=<token>).
 // Menampilkan hasil pengeditan aktual layer (vektor + raster + simbologi) oleh admin.
+// Layer sebesar ini ke atas tidak ditarik otomatis (fitur).
+const AUTO_LOAD_MAX_FEATURES = 2000;
+
 export default function SharedView({ token }: { token: string }) {
   const [shared, setShared] = useState<SharedProject | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "notfound">("loading");
@@ -16,6 +19,24 @@ export default function SharedView({ token }: { token: string }) {
   const [showLayers, setShowLayers] = useState(false);
 
   const activeLayers = useMapStore((s) => s.activeLayers);
+  // Layer yang sedang atau sudah ditarik, supaya tombol "Muat" tidak dobel.
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
+
+  const loadLayer = async (
+    refId: string,
+    meta: NonNullable<SharedProject["vectorLayers"]>[number],
+  ) => {
+    if (loading[refId] || loaded[refId]) return;
+    setLoading((m) => ({ ...m, [refId]: true }));
+    const g = await getSharedLayerGeojson(token, refId);
+    setLoading((m) => ({ ...m, [refId]: false }));
+    if (!g) return;
+    mapStore.addDbLayer(meta, g);
+    const id = mapStore.getState().activeLayers.find((l) => l.sourceRef === refId)?.id;
+    if (id) mapStore.setLayerLocked(id, true);   // read-only untuk pengunjung
+    setLoaded((m) => ({ ...m, [refId]: true }));
+  };
 
   useEffect(() => {
     getSharedProject(token).then((d) => {
@@ -26,24 +47,26 @@ export default function SharedView({ token }: { token: string }) {
         // Set up active layers pada store
         mapStore.addBlocksLayer();
 
-        // Tambah semua layer vektor aktual buatan admin
+        // Layer vektor dimuat per layer. Yang ringan langsung ditarik; yang
+        // berat (belasan ribu fitur, beberapa MB) menunggu pengunjung menekan
+        // "Muat" agar halaman tidak menghabiskan kuota data di ponsel.
         if (d.vectorLayers?.length) {
           for (const vl of d.vectorLayers) {
-            if (vl.geojson) {
-              mapStore.addDbLayer(vl, vl.geojson);
-              // Kunci layer agar read-only bagi viewer
-              const layerId = mapStore.getState().activeLayers.find((l) => l.sourceRef === vl.sourceRef)?.id;
-              if (layerId) mapStore.toggleLayerLock(layerId);
-            }
+            if ((vl.nFeatures ?? 0) <= AUTO_LOAD_MAX_FEATURES) void loadLayer(vl.sourceRef!, vl);
           }
         }
 
-        // Tambah semua layer raster COG buatan admin
+        // Raster tersedia tapi MATI secara default. Menyalakan ke-17 overlay
+        // sekaligus hanya menghasilkan tumpukan gambar buram tempat pengunjung
+        // cuma melihat yang teratas — mereka memilih sendiri mana yang dilihat.
         if (d.rasterLayers?.length) {
           for (const rl of d.rasterLayers) {
             mapStore.addRasterLayer(rl);
             const layerId = mapStore.getState().activeLayers.find((l) => l.sourceRef === rl.sourceRef)?.id;
-            if (layerId) mapStore.toggleLayerLock(layerId);
+            if (layerId) {
+              mapStore.setLayerVisible(layerId, false);  // pengunjung memilih sendiri
+              mapStore.setLayerLocked(layerId, true);    // read-only
+            }
           }
         }
 
@@ -88,8 +111,16 @@ export default function SharedView({ token }: { token: string }) {
         <div className="share-kpis">
           <span style={{ fontFamily: 'var(--font-data)' }}>{s.n_blocks} blok</span>
           <span style={{ fontFamily: 'var(--font-data)' }}>{s.total_area_ha} ha</span>
-          <span className="k-crit" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.critical} kritis</span>
-          <span className="k-ok" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.normal} sehat</span>
+          {/* Tampilkan angka kritis/sehat hanya bila ada blok yang benar-benar
+              dianalisis. Kebun tanpa data sama sekali dulu tampil "N sehat". */}
+          {(s.by_priority.no_data ?? 0) < s.n_blocks ? (
+            <>
+              <span className="k-crit" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.critical} kritis</span>
+              <span className="k-ok" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.normal} sehat</span>
+            </>
+          ) : (
+            <span className="k-nodata" style={{ fontFamily: 'var(--font-data)' }}>belum dianalisis</span>
+          )}
           <button
             className={`map-tool-btn${showLayers ? " active" : ""}`}
             style={{ padding: "4px 10px", fontSize: "12px", background: "var(--bg-card)", border: "1px solid var(--border-default)", color: "var(--text-main)", borderRadius: "4px", cursor: "pointer" }}
@@ -108,7 +139,7 @@ export default function SharedView({ token }: { token: string }) {
           <FloatingLegend />
           <div className="map-legend">
             <div className="map-legend-title">Status blok</div>
-            {(["critical", "warning", "monitor", "normal"] as const).map((k) => (
+            {(["critical", "warning", "monitor", "normal", "no_data"] as const).map((k) => (
               <div className="map-legend-row" key={k}>
                 <span className="map-legend-swatch" style={{ background: PRIORITY_COLOR[k], borderColor: "#fff" }} />
                 <span className="map-legend-label">{PRIORITY_LABEL[k]}</span>
@@ -138,6 +169,37 @@ export default function SharedView({ token }: { token: string }) {
                 </li>
               ))}
             </ul>
+
+            {/* Layer berat: ditarik hanya bila diminta. Menyembunyikannya sama
+                sekali akan membuat pengunjung mengira layernya tidak ada. */}
+            {(shared.vectorLayers ?? []).filter((v) => !loaded[v.sourceRef!]).length > 0 && (
+              <>
+                <div style={{ marginTop: 14, fontSize: 11, color: "var(--text-muted)" }}>
+                  Belum dimuat (ukuran besar)
+                </div>
+                <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(shared.vectorLayers ?? [])
+                    .filter((v) => !loaded[v.sourceRef!])
+                    .map((v) => (
+                      <li key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-card)", padding: "6px 10px", borderRadius: 6, border: "1px dashed var(--border-subtle)", fontSize: 12 }}>
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {v.name}
+                          <span style={{ color: "var(--text-muted)", fontSize: 10 }}>
+                            {" "}· {(v.nFeatures ?? 0).toLocaleString("id-ID")} fitur
+                          </span>
+                        </span>
+                        <button
+                          className="add-layer-btn"
+                          disabled={Boolean(loading[v.sourceRef!])}
+                          onClick={() => loadLayer(v.sourceRef!, v)}
+                        >
+                          {loading[v.sourceRef!] ? "Memuat…" : "Muat"}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </>
+            )}
           </aside>
         )}
 
@@ -145,8 +207,8 @@ export default function SharedView({ token }: { token: string }) {
           <aside className="share-detail">
             <h3>{selected.block_id}</h3>
             <div className="share-detail-sub">{selected.area_ha} ha · {selected.estate}</div>
-            <span className="badge" style={{ background: PRIORITY_COLOR[selected.priority_level] }}>
-              {PRIORITY_LABEL[selected.priority_level]}
+            <span className="badge" style={{ background: priorityColor(selected.priority_level) }}>
+              {priorityLabel(selected.priority_level)}
             </span>
             <div className="concl-section-title">Kondisi ({selected.n_conditions})</div>
             <div className="chips">

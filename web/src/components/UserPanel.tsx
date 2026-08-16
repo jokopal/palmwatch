@@ -39,7 +39,11 @@ export default function UserPanel({ project, summary }: Props) {
           <div className="up-project-stats">
             <div><span className="up-stat-v">{summary?.n_blocks ?? "—"}</span><span className="up-stat-l">Blok</span></div>
             <div><span className="up-stat-v">{summary?.total_area_ha ?? "—"}</span><span className="up-stat-l">Hektar</span></div>
-            <div><span className="up-stat-v" style={{ color: "var(--critical)" }}>{summary?.by_priority?.critical ?? 0}</span><span className="up-stat-l">Kritis</span></div>
+            {(summary?.by_priority?.no_data ?? 0) >= (summary?.n_blocks ?? 0) ? (
+              <div><span className="up-stat-v" style={{ color: "var(--text-muted)" }}>—</span><span className="up-stat-l">Belum dianalisis</span></div>
+            ) : (
+              <div><span className="up-stat-v" style={{ color: "var(--critical)" }}>{summary?.by_priority?.critical ?? 0}</span><span className="up-stat-l">Kritis</span></div>
+            )}
           </div>
         </div>
         <div className="up-readonly-note">👁 Mode lihat — hanya admin yang dapat mengedit data & simbologi.</div>
@@ -49,7 +53,7 @@ export default function UserPanel({ project, summary }: Props) {
       <div className="sidebar-section">
         <h3 className="sidebar-title">Legenda Status Blok</h3>
         <div className="up-legend">
-          {(["critical", "warning", "monitor", "normal"] as const).map((k) => (
+          {(["critical", "warning", "monitor", "normal", "no_data"] as const).map((k) => (
             <div className="up-legend-row" key={k}>
               <span className="up-legend-sw" style={{ background: PRIORITY_COLOR[k] }} />
               {PRIORITY_LABEL[k]}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BlockCollection, Intervention, Timeseries } from "../types";
-import { api, PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
+import { api, priorityColor, priorityLabel } from "../api";
 import { useMapStore } from "../store/mapStore";
 import type { BlockAnalysisSummary, TableRow, AnalysisResult } from "../store/mapStore";
 import { isReady, lockedProps } from "../features";
@@ -583,7 +583,6 @@ function BlockDetail({
   tableRow: TableRow | undefined;
   tableValueFields: string[] | undefined;
 }) {
-  const { PRIORITY_COLOR: PC, PRIORITY_LABEL: PL } = { PRIORITY_COLOR, PRIORITY_LABEL };
   const p = legacyProps;
 
   // Group zones by ref_layer_name
@@ -598,8 +597,9 @@ function BlockDetail({
       {/* Block header */}
       <div className="concl-head">
         {p && (
-          <span className="badge" style={{ background: PC[p.priority_level] }}>
-            {PL[p.priority_level]} &middot; skor {p.severity_score}
+          <span className="badge" style={{ background: priorityColor(p.priority_level) }}>
+            {priorityLabel(p.priority_level)}
+            {p.severity_score != null ? ` · skor ${p.severity_score}` : ""}
           </span>
         )}
         <span className="concl-block">
