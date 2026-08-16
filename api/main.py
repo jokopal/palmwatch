@@ -94,7 +94,21 @@ app.add_middleware(
 )
 
 
-# ── Global exception handler ──────────────────────────────────────
+# ── Exception handlers ────────────────────────────────────────────
+
+@app.exception_handler(data_source.DataUnavailable)
+async def data_unavailable_handler(request: Request, exc: data_source.DataUnavailable):
+    """Sumber data tak terjangkau -> 503, bukan data karangan.
+
+    Dulu endpoint diam-diam menyajikan blok sintetis saat PostGIS mati, jadi
+    dashboard tampak sehat dengan angka yang tidak ada dasarnya."""
+    log.warning("data_unavailable", path=request.url.path, error=str(exc))
+    return JSONResponse(
+        status_code=503,
+        content={"detail": str(exc), "path": request.url.path},
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     log.error("unhandled_error", path=request.url.path, error=str(exc))
@@ -119,7 +133,7 @@ def root():
 @app.get("/api/health", tags=["meta"])
 @limiter.limit("30/minute")
 def health(request: Request) -> HealthSchema:
-    """Status server + sumber data aktif (postgis / sample)."""
+    """Status server + sumber data aktif (postgis / unavailable)."""
     return data_source.health()
 
 

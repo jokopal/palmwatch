@@ -8,7 +8,6 @@ supabase/
   config.toml                         # konfigурasi project (dari `supabase init`)
   migrations/
     20260610054833_init_schema.sql    # tabel + PostGIS + RLS + fungsi RPC
-  seed.sql                            # data awal (12 blok + NDVI/LST/curah hujan)
 ```
 
 Client (React) membaca **langsung** dari Supabase lewat 3 fungsi RPC:
@@ -44,21 +43,15 @@ supabase db push
 Ini menjalankan `migrations/20260610054833_init_schema.sql` (membuat extension
 PostGIS, tabel, RLS, dan fungsi RPC).
 
-### 4. Muat seed data
-`db push` TIDAK menjalankan seed. Pilih salah satu:
+### 4. Data awal
 
-- **A. Reset + seed (project kosong/fresh):**
-  ```bash
-  supabase db reset --linked     # menjalankan migrasi + seed.sql di remote
-  ```
-- **B. Tanpa reset** — jalankan seed manual lewat connection string
-  (Settings → Database → Connection string → URI):
-  ```bash
-  psql "postgresql://postgres:<PASSWORD>@db.<REF>.supabase.co:5432/postgres" -f supabase/seed.sql
-  ```
-- **C. Tanpa psql** — buka **SQL Editor** di dashboard, tempel isi `supabase/seed.sql`, Run.
+**Tidak ada seed demo.** Berkas `seed.sql` dan `scripts/generate_seed.py`
+sengaja dihapus pada Fase C: isinya blok sintetis, dan baris pertamanya
+melakukan `truncate ... cascade` sehingga menjalankannya akan menghapus data
+kebun yang sebenarnya.
 
-Regenerasi seed kapan saja: `python scripts/generate_seed.py`.
+Isi database dengan data nyata lewat aplikasi: login sebagai admin → tab
+**Upload** → unggah batas kebun (SHP/GeoJSON) dan centang "simpan sebagai AOI".
 
 ### 5. Hubungkan client
 ```bash

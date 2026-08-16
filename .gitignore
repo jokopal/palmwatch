@@ -44,3 +44,4 @@ brand/__pycache__/
 
 # Generated COG output (Track C3) — regenerate via run_dem.py
 out_cog/
+backups/

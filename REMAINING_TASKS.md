@@ -111,6 +111,55 @@ tidak dikenal library, dan URL-nya relatif.
 
 ---
 
+## 🧹 Fase C — Data nyata, demo dibuang (SELESAI)
+
+Backup penuh dibuat lebih dulu: `python scripts/backup_db.py --label sebelum-hapus-demo`
+→ `backups/20260817-041413-sebelum-hapus-demo/` (428 baris, 12 tabel, CSV +
+`restore.sql` dengan geometri EWKT). Folder `backups/` masuk `.gitignore`.
+
+Migrasi `20260715000000_phase_c_real_data.sql`:
+
+- ✅ **Project diganti nama** → `Kebun 77 - Kotawaringin` (dari
+  "Kalimantan Timur — Demo"). Namanya ada di DB, bukan hardcode di frontend.
+- ✅ **Estate blok nyata disamakan** — sebelumnya mewarisi nama project lama.
+- ✅ **12 blok demo `BLK-*` dihapus permanen**, beserta 144 kondisi, 228
+  pembacaan EO, dan 12 data tanah (FK `ON DELETE CASCADE`). Blok-blok itu ada
+  di Kalimantan Timur (~117,15 BT), 610 km dari kebun sebenarnya, sehingga
+  `fitBounds` selalu merentang lintas pulau. **Rentang peta kini 1,6 km.**
+- ✅ **Layer uji `C_1` dihapus** — 63 poligon di Lombok–Sumbawa (116,0 BT /
+  −8,9 LS), atribut serba "Tidak Ada", dan `project_id`-nya NULL.
+- ✅ **Kebocoran RLS ditutup** — tiga kebijakan baca (`vector_layers`,
+  `raster_layers`, `analysis_results`) memberi akses ke baris ber-`project_id`
+  NULL kepada SEMUA user terautentikasi. Dengan satu project tak terasa; begitu
+  ada kebun kedua, data satu klien terlihat oleh klien lain. Admin tetap bisa
+  melihat baris yatim lewat `is_admin()` di dalam `is_member()`.
+
+Pembersihan jalur data palsu di kode:
+
+- ✅ **`supabase/seed.sql` + `scripts/generate_seed.py` + `load_seed.py` dihapus.**
+  Berkas seed sudah diperbarui ke nama/koordinat asli, tapi baris pertamanya
+  `truncate ... cascade` — menjalankannya sekarang akan **menghapus 5 blok
+  nyata** lalu menggantinya dengan blok sintetis. Itu ranjau, bukan alat.
+- ✅ **`api/sample_data.py` dihapus**, fallback di `data_source.py` dicabut.
+  Dulu endpoint diam-diam menyajikan blok karangan saat PostGIS mati sehingga
+  dashboard tampak sehat; kini melempar `DataUnavailable` → HTTP 503.
+- ✅ **`tests/test_api.py` ditulis ulang** (10 tes → 7). Tes lama justru
+  mengunci perilaku lama: memastikan data karangan selalu tersaji.
+- ✅ Dokumen (`supabase/SETUP.md`, `web/README.md`, `types.ts`) tak lagi
+  merujuk berkas yang sudah tidak ada.
+
+### Sisa yang perlu diputuskan
+
+- **`blocks_example.geojson` dipertahankan** — hanya dipakai `tests/test_geometry.py`
+  sebagai fixture unit test, bukan data aplikasi.
+- **KPI "5 sehat" menyesatkan.** Kelima blok tidak punya data kondisi sama
+  sekali, tapi `coalesce(priority_level,'normal')` membuatnya terhitung sehat.
+  Ini pekerjaan Fase D (empty state jujur).
+- **`is_public = true`** pada project masih aktif (link share hidup). Tinjau
+  sebelum rilis ke klien.
+
+---
+
 ## 🩹 Perbaikan render & simbologi (keluhan: layer tak terlihat, simbologi, apply)
 
 - ✅ **Urutan tumpukan ditegakkan** — `web/src/map/layerIds.ts` (BARU).

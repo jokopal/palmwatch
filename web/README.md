@@ -14,7 +14,7 @@ Browser (React + MapLibre + Recharts)  ──/api──▶  FastAPI  ──▶  
 
 - **`api/`** — FastAPI server. Membaca dari PostGIS bila variabel `POSTGIS_*`
   diset & DB hidup; jika tidak, fallback otomatis ke data sample deterministik
-  (`api/sample_data.py`) — struktur persis skema GeoJSON di `context.md`.
+  — struktur persis skema GeoJSON di `context.md`.
 - **`web/`** — Vite + React + TypeScript. MapLibre GL untuk peta, Recharts untuk
   time-series. Saat dev, `/api` di-proxy ke `localhost:8000` (lihat
   `vite.config.ts`).

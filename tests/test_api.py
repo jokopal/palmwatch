@@ -6,76 +6,52 @@ from api.main import app
 
 client = TestClient(app)
 
+# API ini TIDAK LAGI punya data sample. Tanpa PostGIS terkonfigurasi, setiap
+# endpoint data menjawab 503 — bukan blok sintetis yang tampak meyakinkan.
+#
+# Tes di bawah menjalankan skenario itu (PostGIS tak tersedia di CI) dan
+# memastikan kegagalannya jujur serta konsisten. Dulu tes ini justru mengunci
+# perilaku sebaliknya: memastikan data karangan selalu tersaji.
 
-def test_health():
+
+def test_health_melaporkan_sumber_tak_tersedia():
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["status"] == "ok"
-    assert body["data_source"] in ("sample",)
+    assert body["data_source"] == "unavailable"
+    assert body["postgis_reachable"] is False
+    assert body["status"] == "degraded"
 
 
-def test_summary():
+def test_summary_503_tanpa_postgis():
     resp = client.get("/api/summary")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["n_blocks"] > 0
-    assert "by_priority" in body
+    assert resp.status_code == 503
+    assert "PostGIS" in resp.json()["detail"]
 
 
-def test_blocks():
+def test_blocks_503_tanpa_postgis():
     resp = client.get("/api/blocks")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["type"] == "FeatureCollection"
-    assert len(body["features"]) > 0
+    assert resp.status_code == 503
 
 
-def test_blocks_filter():
-    for priority in ("critical", "warning", "monitor", "normal"):
-        resp = client.get(f"/api/blocks?priority={priority}")
-        assert resp.status_code == 200
-        for feat in resp.json()["features"]:
-            assert feat["properties"]["priority_level"] == priority
-
-
-def test_blocks_invalid_filter():
+def test_blocks_filter_tak_valid_tetap_400():
+    """Validasi argumen harus didahulukan sebelum menyentuh sumber data."""
     resp = client.get("/api/blocks?priority=invalid")
     assert resp.status_code == 400
 
 
-def test_block_detail():
-    # Get first block
-    blocks = client.get("/api/blocks").json()
-    block_id = blocks["features"][0]["properties"]["block_id"]
-
-    resp = client.get(f"/api/blocks/{block_id}")
-    assert resp.status_code == 200
-    assert resp.json()["properties"]["block_id"] == block_id
+def test_block_detail_503_tanpa_postgis():
+    resp = client.get("/api/blocks/000000-001")
+    assert resp.status_code == 503
 
 
-def test_block_detail_not_found():
-    resp = client.get("/api/blocks/NONEXISTENT")
-    assert resp.status_code == 404
+def test_timeseries_503_tanpa_postgis():
+    resp = client.get("/api/blocks/000000-001/timeseries")
+    assert resp.status_code == 503
 
 
-def test_block_timeseries():
-    blocks = client.get("/api/blocks").json()
-    block_id = blocks["features"][0]["properties"]["block_id"]
-
-    resp = client.get(f"/api/blocks/{block_id}/timeseries")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["block_id"] == block_id
-    assert len(body["series"]) > 0
-
-
-def test_block_timeseries_not_found():
-    resp = client.get("/api/blocks/NONEXISTENT/timeseries")
-    assert resp.status_code == 404
-
-
-def test_root():
+def test_root_tetap_hidup():
+    """Endpoint meta tidak bergantung pada data, jadi harus tetap 200."""
     resp = client.get("/")
     assert resp.status_code == 200
     assert resp.json()["name"] == "PalmWatch API"

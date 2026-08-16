@@ -3,9 +3,13 @@ api/data_source.py
 ==================
 Lapisan abstraksi data untuk API dashboard.
 
-Strategi: coba baca dari PostGIS (skema tenant, lihat storage/postgis_writer.py).
-Bila DB tidak tersedia / kosong, fallback otomatis ke data sample deterministik
-(api/sample_data.py) sehingga dashboard tetap jalan untuk demo Fase 1.
+Satu-satunya sumber data: PostGIS (skema tenant, lihat storage/postgis_writer.py).
+
+TIDAK ADA fallback ke data sample. Dulu endpoint diam-diam menyajikan blok
+sintetis saat database tak terjangkau, sehingga dashboard tampak sehat padahal
+angkanya karangan — tidak mungkin membedakan "kebun ini memang begitu" dari
+"koneksi database putus". Kini ketiadaan data dilaporkan apa adanya sebagai
+DataUnavailable, dan pemanggil menerjemahkannya jadi HTTP 503.
 
 Status sumber data dapat dicek lewat `health()`.
 """
@@ -14,10 +18,11 @@ from __future__ import annotations
 
 import json
 import os
-from functools import lru_cache
 from typing import Dict, Optional
 
-from . import sample_data
+
+class DataUnavailable(RuntimeError):
+    """PostGIS tidak terjangkau. Sengaja tidak diganti data karangan."""
 
 
 def _postgis_available() -> bool:
@@ -41,12 +46,6 @@ def _postgis_available() -> bool:
         return True
     except Exception:
         return False
-
-
-# ── Cache data sample (deterministik, murah dibangun) ────────────────────────
-@lru_cache(maxsize=1)
-def _sample_fc() -> str:
-    return json.dumps(sample_data.build_feature_collection())
 
 
 def _fetch_postgis_fc() -> Optional[Dict]:
@@ -149,26 +148,27 @@ def _fetch_postgis_fc() -> Optional[Dict]:
 
 def _fc() -> Dict:
     pg_fc = _fetch_postgis_fc()
-    if pg_fc is not None:
-        return pg_fc
-    return json.loads(_sample_fc())
+    if pg_fc is None:
+        raise DataUnavailable(
+            "PostGIS tidak terjangkau. Setel POSTGIS_* di environment; "
+            "tidak ada data pengganti yang disajikan."
+        )
+    return pg_fc
 
 
 # ── API publik dipakai oleh main.py ──────────────────────────────────────────
 
 def source_name() -> str:
-    pg_fc = _fetch_postgis_fc()
-    if pg_fc is not None:
-        return "postgis"
-    return "sample"
+    return "postgis" if _postgis_available() else "unavailable"
 
 
 def health() -> Dict:
+    reachable = _postgis_available()
     return {
-        "status": "ok",
+        "status": "ok" if reachable else "degraded",
         "data_source": source_name(),
         "postgis_configured": bool(os.getenv("POSTGIS_PASSWORD")),
-        "postgis_reachable": _postgis_available(),
+        "postgis_reachable": reachable,
     }
 
 
@@ -191,12 +191,24 @@ def get_block(block_id: str) -> Optional[Dict]:
 
 
 def get_timeseries(block_id: str) -> Optional[Dict]:
+    """Deret waktu per blok belum tersedia dari PostGIS (dulu dikarang sample)."""
     if get_block(block_id) is None:
         return None
-    return sample_data.build_timeseries(block_id)
+    raise DataUnavailable("Deret waktu belum tersedia dari PostGIS.")
 
 
 def get_summary() -> Dict:
-    summary = sample_data.build_summary(_fc())
-    summary["data_source"] = source_name()
-    return summary
+    fc = _fc()
+    by_priority: Dict[str, int] = {}
+    total_area = 0.0
+    for f in fc["features"]:
+        p = f["properties"]
+        key = p.get("priority_level") or "normal"
+        by_priority[key] = by_priority.get(key, 0) + 1
+        total_area += float(p.get("area_ha") or 0)
+    return {
+        "n_blocks": len(fc["features"]),
+        "total_area_ha": round(total_area, 1),
+        "by_priority": by_priority,
+        "data_source": source_name(),
+    }

@@ -1,4 +1,4 @@
-// Tipe data selaras struktur output API (api/sample_data.py)
+// Tipe data selaras struktur output RPC Supabase (blocks_geojson dll.)
 
 export type PriorityLevel = "critical" | "warning" | "monitor" | "normal";
 
