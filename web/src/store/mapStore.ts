@@ -45,14 +45,26 @@ export interface Symbology {
 export type LayerKind = "blocks" | "reference" | "gee" | "db" | "raster";
 
 // ── Raster Layer (COG) config ─────────────────────────────────────────────────
+/**
+ * Konfigurasi overlay raster.
+ *
+ * Raster digambar sebagai PNG ber-alpha lewat `image` source MapLibre (URL +
+ * empat koordinat sudut), bukan lagi lewat protokol COG. Pewarnaan sudah
+ * dipanggang saat build oleh scripts/build_raster_overlays.py, sehingga
+ * `colormap`, `minValue`, dan `maxValue` di sini bersifat INFORMATIF — untuk
+ * legenda dan panel properti — bukan parameter render.
+ *
+ * Mengubah warna atau rentang = jalankan ulang skrip, bukan ubah nilai ini.
+ */
 export interface RasterLayerConfig {
-  url: string;                                   // URL publik ke file COG
-  colormap?: string;                             // nama skema warna geomatico (mis. "BrewerSpectral9")
-  minValue?: number;
-  maxValue?: number;
-  bounds?: [number, number, number, number];     // [minx,miny,maxx,maxy] EPSG:4326
-  category?: string;                             // dem|soil|rainfall|twi|ndvi|other
-  opacity: number;                               // 0..1
+  url: string;                                   // URL PNG overlay (mis. /overlays/dem-ortho-5m.png)
+  bounds: [number, number, number, number];      // [minx,miny,maxx,maxy] EPSG:4326 — WAJIB
+  opacity: number;                               // 0..1 — satu-satunya yang live
+  colormap?: string;                             // nama skema matplotlib (informatif)
+  minValue?: number;                             // nilai data pada ujung bawah legenda
+  maxValue?: number;                             // nilai data pada ujung atas legenda
+  legend?: string[];                             // warna hex urut min -> max
+  category?: string;                             // dem|soil|rainfall|twi|ndvi|drainage|other
 }
 
 // ── Reference Layer: kelas diskrit untuk analisis ─────────────────────────────
@@ -177,7 +189,6 @@ export interface MapState {
   analysisRunning: boolean;
   temporalGroupId: string | null;  // layer_group dipilih untuk temporal
   rasterLayers: AvailableLayer[];  // katalog raster COG dari DB (group === "raster")
-  clipRasterToBoundary: boolean;   // clip semua raster COG ke batas blok (performa + fokus AOI)
   /**
    * Kegagalan render per layer (id layer -> pesan). Diisi MapView saat MapLibre
    * melaporkan error pada source milik kita (COG rusak, 404, CORS, di luar AOI).
@@ -320,7 +331,6 @@ let state: MapState = {
   analysisRunning: false,
   temporalGroupId: null,
   rasterLayers: [],
-  clipRasterToBoundary: false,
   layerErrors: {},
 };
 
@@ -504,8 +514,6 @@ export const mapStore = {
     else delete layerErrors[id];
     set({ layerErrors });
   },
-
-  setClipRasterToBoundary: (clipRasterToBoundary: boolean) => set({ clipRasterToBoundary }),
 
   // Tambah layer hasil analisis (zona)
   addAnalysisZoneLayer: (result: AnalysisResult) => {

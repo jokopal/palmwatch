@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import { cogProtocol, setMask, clearMask } from "@geomatico/maplibre-cog-protocol";
 import type { BlockCollection } from "../types";
 import { applyBasemap, baseStyle } from "../map/basemaps";
 import { registerMainMap, canZoomToLayer, zoomToLayer } from "../map/zoomToLayer";
@@ -11,23 +10,6 @@ import {
 import { mapStore, type ActiveLayer, type InsetLayerKey, type RasterLayerConfig, type Symbology } from "../store/mapStore";
 import { fillColorExpr } from "../map/symbology";
 import { rampColorExpr } from "../map/ramps";
-
-// Registrasi protokol COG sekali untuk seluruh aplikasi (idempoten).
-let cogProtocolRegistered = false;
-function ensureCogProtocol() {
-  if (cogProtocolRegistered) return;
-  maplibregl.addProtocol("cog", cogProtocol);
-  cogProtocolRegistered = true;
-}
-
-export const RASTER_CATEGORY_PRESETS: Record<string, { colormap: string; min: number; max: number }> = {
-  ndvi:     { colormap: "Viridis",          min: -0.2, max: 1.0 },
-  dem:      { colormap: "BrewerSpectral9",  min: 0,    max: 500 },
-  lst:      { colormap: "Magma",            min: 15,   max: 45 },
-  rainfall: { colormap: "Blues",            min: 0,    max: 500 },
-  twi:      { colormap: "Teal",             min: 0,    max: 20 },
-  soil:     { colormap: "Oranges",          min: 0,    max: 100 },
-};
 
 function isValidWgs84Bounds(b?: [number, number, number, number]): boolean {
   if (!b || b.length !== 4) return false;
@@ -41,24 +23,10 @@ function isValidWgs84Bounds(b?: [number, number, number, number]): boolean {
   );
 }
 
-// Bangun URL sumber untuk maplibre-cog-protocol.
-// Single-band + colormap → fragment "#color:<scheme>,<min>,<max>,c"; selain itu RGB apa adanya.
-function cogSourceUrl(cfg: RasterLayerConfig): string {
-  const url = cfg.url.startsWith("cog://") ? cfg.url : `cog://${cfg.url}`;
-  const cat = (cfg.category ?? "other").toLowerCase();
-  const preset = RASTER_CATEGORY_PRESETS[cat] ?? { colormap: "BrewerSpectral9", min: 0, max: 100 };
-
-  const cm = cfg.colormap || preset.colormap;
-  let min = cfg.minValue ?? preset.min;
-  let max = cfg.maxValue ?? preset.max;
-  if (max <= min) max = min + 1.0;
-
-  return `${url}#color:${cm},${min.toFixed(2)},${max.toFixed(2)},c`;
-}
-
-// Tanda tangan sumber raster: berubah -> source WAJIB dibangun ulang, karena
-// colormap & rentang nilai tertanam di dalam URL protokol cog://.
-const rasterSignature = (cfg: RasterLayerConfig) => cogSourceUrl(cfg);
+// Tanda tangan overlay raster: berubah -> source dibangun ulang. Gambar dan
+// penempatannya yang menentukan, bukan warna (warna sudah dipanggang di PNG).
+const rasterSignature = (cfg: RasterLayerConfig) =>
+  `${cfg.url}|${(cfg.bounds ?? []).join(",")}`;
 
 // MapView — render engine utama PalmWatch
 // Sumber data:
@@ -122,26 +90,6 @@ function labelLayoutExpr(sym: Symbology) {
     "text-max-width": 8,
   };
 }
-
-// ── Bounding box helper (untuk gerbang mask raster) ──────────────────────────
-type BBox = [number, number, number, number];
-
-function bboxOfCollection(fc: GeoJSON.FeatureCollection): BBox | null {
-  const b = new maplibregl.LngLatBounds();
-  for (const f of fc.features) {
-    const g = f.geometry;
-    if (!g) continue;
-    if (g.type === "Polygon") {
-      for (const ring of g.coordinates) for (const c of ring) b.extend([c[0], c[1]]);
-    } else if (g.type === "MultiPolygon") {
-      for (const poly of g.coordinates) for (const ring of poly) for (const c of ring) b.extend([c[0], c[1]]);
-    }
-  }
-  return b.isEmpty() ? null : [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-}
-
-const bboxIntersects = (a: BBox, b: BBox) =>
-  a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 
 export default function MapView({
   data,
@@ -334,6 +282,14 @@ export default function MapView({
   }
 
   // ── syncRasterLayers ────────────────────────────────────────────────────────
+  //
+  // Raster digambar sebagai overlay PNG lewat `image` source MapLibre: satu URL
+  // gambar plus empat koordinat sudut. Tidak ada decoder GeoTIFF, tidak ada
+  // range request, tidak ada nama colormap yang harus dikenali library — jalur
+  // yang dulu membuat raster gagal tampil tanpa satu pun pesan error.
+  //
+  // Pewarnaan sudah dipanggang oleh scripts/build_raster_overlays.py, jadi yang
+  // masih bisa diubah saat runtime hanyalah opacity dan visibilitas.
   function syncRasterLayers() {
     const map = mapRef.current;
     if (!map || !loadedRef.current || colorByRef.current) return;
@@ -343,8 +299,7 @@ export default function MapView({
     );
     const wanted = new Map(rasterLayers.map((l) => [l.id, l] as const));
 
-    // Buang raster yang hilang dari store ATAU yang tanda tangan sumbernya
-    // berubah (colormap / rentang nilai baru → URL cog:// baru).
+    // Buang raster yang hilang dari store, atau yang gambar/bbox-nya berganti.
     for (const [lid, sig] of [...rasterSigRef.current]) {
       const still = wanted.get(lid);
       const nextSig = still?.rasterConfig ? rasterSignature(still.rasterConfig) : null;
@@ -361,19 +316,22 @@ export default function MapView({
       const vis = l.visible ? "visible" : "none";
 
       if (!map.getSource(srcId)) {
-        const validBounds = isValidWgs84Bounds(cfg.bounds) ? cfg.bounds : undefined;
+        if (!isValidWgs84Bounds(cfg.bounds)) {
+          mapStore.setLayerError(l.id, "Bbox raster tidak valid — overlay tidak bisa ditempatkan.");
+          continue;
+        }
+        const [w, s2, e, n] = cfg.bounds;
         map.addSource(srcId, {
-          type: "raster",
-          url: cogSourceUrl(cfg),
-          tileSize: 256,
-          ...(validBounds ? { bounds: validBounds } : {}),
-          maxzoom: 22,
+          type: "image",
+          url: cfg.url,
+          // Urutan sudut wajib: kiri-atas, kanan-atas, kanan-bawah, kiri-bawah.
+          coordinates: [[w, n], [e, n], [e, s2], [w, s2]],
         });
         map.addLayer({
           id: rastLyr(l.id),
           type: "raster",
           source: srcId,
-          paint: { "raster-opacity": cfg.opacity },
+          paint: { "raster-opacity": cfg.opacity, "raster-fade-duration": 0 },
           layout: { visibility: vis },
         });
         rasterSigRef.current.set(l.id, rasterSignature(cfg));
@@ -382,62 +340,6 @@ export default function MapView({
         map.setLayoutProperty(rastLyr(l.id), "visibility", vis);
       }
     }
-    applyRasterMask();
-  }
-
-  // ── applyRasterMask ─────────────────────────────────────────────────────────
-  // Clip SEMUA raster COG ke batas blok (setMask bersifat global di library).
-  //
-  // GERBANG PENTING: bila ada raster yang bbox-nya tidak bersinggungan dengan
-  // batas blok, masking akan menghapusnya dari layar sepenuhnya tanpa penjelasan
-  // apa pun — penyebab klasik "raster sudah diunggah tapi tidak terlihat".
-  // Dalam kasus itu masking dilewati dan alasannya dilaporkan ke panel layer.
-  function applyRasterMask() {
-    const map = mapRef.current;
-    if (!map || !loadedRef.current || colorByRef.current) return;
-
-    const clip = mapStore.getState().clipRasterToBoundary;
-    const fc = dataRef.current;
-    const rasters = mapStore.getState().activeLayers.filter((l) => l.kind === "raster");
-    const hasBlocksLyr = Boolean(blocksLayer());
-    const blocksBbox = fc && fc.features.length > 0 && hasBlocksLyr
-      ? bboxOfCollection(fc as unknown as GeoJSON.FeatureCollection)
-      : null;
-
-    let outside = false;
-    for (const l of rasters) {
-      const b = l.rasterConfig?.bounds;
-      const disjoint = Boolean(clip && blocksBbox && b && !bboxIntersects(b as BBox, blocksBbox));
-      if (disjoint) outside = true;
-      mapStore.setLayerError(
-        l.id,
-        disjoint
-          ? "Raster berada di luar batas blok — clip dimatikan sementara agar tetap terlihat."
-          : null,
-      );
-    }
-
-    if (clip && !outside && blocksBbox && hasBlocksLyr && rasters.length > 0) {
-      setMask(fc as unknown as GeoJSON.FeatureCollection);
-    } else {
-      clearMask();
-    }
-    map.triggerRepaint();
-  }
-
-  // Bangun ulang semua source raster (dipakai saat toggle clip berubah agar tile
-  // ter-decode ulang dengan mask baru — tile lama di-cache tak otomatis refresh).
-  function rebuildRasterSources() {
-    const map = mapRef.current;
-    if (!map || !loadedRef.current) return;
-    for (const lid of [...rasterSigRef.current.keys()]) {
-      if (map.getLayer(rastLyr(lid))) map.removeLayer(rastLyr(lid));
-      if (map.getSource(rastSrc(lid))) map.removeSource(rastSrc(lid));
-      rasterSigRef.current.delete(lid);
-    }
-    applyRasterMask();
-    syncRasterLayers();
-    syncOrder(true);
   }
 
   // ── Penegakan urutan tumpukan ───────────────────────────────────────────────
@@ -576,7 +478,6 @@ export default function MapView({
   // ── Init map (sekali) ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!ref.current || mapRef.current) return;
-    ensureCogProtocol();
     const map = new maplibregl.Map({
       container: ref.current,
       style: baseStyle(mapStore.getState().basemap),
@@ -644,15 +545,12 @@ export default function MapView({
   // ── Data blok berubah ────────────────────────────────────────────────────────
   useEffect(() => {
     renderBlocks();
-    // Batas blok berubah -> gerbang mask raster perlu dinilai ulang.
-    applyRasterMask();
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Store subscription (basemap + simbologi blok + overlay layers + 3D) ─────
   useEffect(() => {
     let curBasemap = mapStore.getState().basemap;
     let cur3D = mapStore.getState().threeD;
-    let curClip = mapStore.getState().clipRasterToBoundary;
     let curHasBlocks = mapStore.getState().activeLayers.some((l) => l.kind === "blocks");
 
     const removeAllBlocks = () => {
@@ -721,9 +619,6 @@ export default function MapView({
       // 3D toggle
       const n3d = mapStore.getState().threeD;
       if (n3d !== cur3D) { cur3D = n3d; apply3D(); }
-      // Clip raster ke boundary toggle
-      const nClip = mapStore.getState().clipRasterToBoundary;
-      if (nClip !== curClip) { curClip = nClip; rebuildRasterSources(); }
     });
     return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

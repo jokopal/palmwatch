@@ -65,6 +65,52 @@ diperbaiki & diverifikasi:
 - ✅ **Loading skeleton** — `LoadingOverlay.tsx`; peta tak lagi tampil kosong
   tanpa penjelasan selagi `blocks_geojson` dimuat.
 
+## 🚦 Fase A — Pagar role & pembekuan fitur (SELESAI)
+
+- ✅ **`web/src/capabilities.ts`** — satu sumber kebenaran "siapa boleh apa".
+  Dulu keputusan ini tersebar sebagai `isAdmin &&` di belasan tempat; satu titik
+  terlewat = kontrol admin bocor ke viewer. Komponen kini memakai
+  `useCapabilities()`, tidak pernah memeriksa role langsung.
+- ✅ **Role `loading` eksplisit** — selama role belum diketahui, kapabilitasnya
+  kosong. Sebelumnya default `"user"` membuat UI viewer berkedip untuk admin.
+- ✅ **`fetchMyRole()` bertipe hasil** — kegagalan (RLS/jaringan/baris hilang)
+  tidak lagi tak bisa dibedakan dari "memang viewer". Gagal = role `guest`
+  (paling terbatas) + banner yang menyebut sebabnya.
+- ✅ **Bypass auth dikunci ke dev** — `VITE_PREVIEW_NO_AUTH` kini dibungkus
+  `import.meta.env.DEV`, jadi cabangnya hilang dari bundel produksi. Nilai
+  role preview wajib eksplisit; dulu apa pun selain `"user"` berarti **admin
+  tanpa login**.
+- ✅ **`web/src/features.ts`** — flag `ready | locked | hidden`. Terkunci
+  sekarang: analysis, tab Temporal, tab Conclusion, inset, production data,
+  unggah raster. Tersembunyi: layer GEE (tak punya pipeline tile sama sekali).
+  Membuka fitur = ubah satu baris di berkas itu.
+
+## 🖼️ Fase B — Raster dijamin tampil (SELESAI)
+
+COG diganti **overlay PNG + `image` source MapLibre**. Alasannya: seluruh raster
+proyek ini hanya ~112.000 piksel (setara satu citra 334×334); men-decode GeoTIFF
+di browser adalah overhead yang justru jadi sumber kegagalan senyap. Dua bug
+nyata ditemukan di jalur lama: 7 dari 8 nama colormap di `defaultCogs.json`
+tidak dikenal library, dan URL-nya relatif.
+
+- ✅ **`scripts/build_raster_overlays.py`** — baca raster (dari `raster_layers`
+  atau `web/public/cogs`), warnai dengan matplotlib, tulis PNG ber-alpha
+  (nodata transparan) + manifest `web/src/rasterOverlays.json` berisi bbox,
+  rentang nilai, dan warna legenda. Membuang PNG basi yang tak ada di manifest.
+  Raster < 12 piksel dilewati (Curah Hujan 2×1 px bukan peta, itu satu angka).
+- ✅ **17 overlay, total 74,9 KB** — lebih kecil dari TIFF sumbernya (204 KB).
+- ✅ **Legenda dijamin cocok dengan gambar** — gradiennya dibangun dari colormap
+  yang sama. Dulu hardcoded biru-hijau apa pun skema rasternya.
+- ✅ Dibuang: `cogProtocol`, `setMask`/`clearMask`, `clipRasterToBoundary`,
+  tombol ✂, `defaultCogs.json`, `web/public/cogs/`, fallback blob COG di upload.
+
+> **Konsekuensi yang disengaja:** warna raster jadi tetap. Ganti skema warna
+> atau rentang = jalankan ulang skripnya, bukan geser kontrol di panel. Nilai
+> piksel juga tak bisa dibaca saat hover. Raster yang baru diunggah belum
+> tampil sampai skrip dijalankan — karena itu unggah raster dikunci.
+
+---
+
 ## 🩹 Perbaikan render & simbologi (keluhan: layer tak terlihat, simbologi, apply)
 
 - ✅ **Urutan tumpukan ditegakkan** — `web/src/map/layerIds.ts` (BARU).

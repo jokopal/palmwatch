@@ -4,7 +4,8 @@ import {
   type AvailableLayer, type ActiveLayer,
 } from "../store/mapStore";
 import LayerPropertiesPanel from "./LayerPropertiesPanel";
-import { useIsAdmin } from "../auth";
+import { useCapabilities } from "../auth";
+import { isHidden, isReady } from "../features";
 import { canZoomToLayer, zoomToLayer } from "../map/zoomToLayer";
 
 interface Props {
@@ -27,7 +28,7 @@ export default function LayersTab({ onAddDb }: Props) {
   const dbLayers     = useMapStore((s) => s.dbLayers);
   const rasterLayers = useMapStore((s) => s.rasterLayers);
   const tableLayer   = useMapStore((s) => s.tableLayer);
-  const isAdmin      = useIsAdmin();
+  const caps         = useCapabilities();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const activeRefs = new Set(activeLayers.map((l) => l.sourceRef));
@@ -54,7 +55,7 @@ export default function LayersTab({ onAddDb }: Props) {
         </div>
 
         {/* Analysis readiness indicator (admin only) */}
-        {isAdmin && (analysisAvailable ? (
+        {caps.runAnalysis && isReady("analysis") && (analysisAvailable ? (
           <div className="analysis-ready-hint">
             {refLayers.length} reference layer siap. Klik <b>Run Analysis</b> di toolbar atas.
           </div>
@@ -92,7 +93,7 @@ export default function LayersTab({ onAddDb }: Props) {
             <span className="table-layer-meta">
               {tableLayer.rows.length} baris · join: {tableLayer.joinField}
             </span>
-            {isAdmin && (
+            {caps.editLayers && (
               <button className="layer-remove-btn"
                 onClick={() => mapStore.setTableLayer(null)} title="Hapus table layer">
                 x
@@ -103,7 +104,7 @@ export default function LayersTab({ onAddDb }: Props) {
       </div>
 
       {/* ── AVAILABLE LAYERS (admin only — user = read-only) ──── */}
-      {isAdmin && (
+      {caps.editLayers && (
       <div className="sidebar-section" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         <h3 className="sidebar-title">Available Layers</h3>
 
@@ -180,22 +181,28 @@ export default function LayersTab({ onAddDb }: Props) {
           </ul>
         )}
 
-        {/* GEE Sources — paling bawah */}
-        <div className="avail-group-title">GEE Sources</div>
-        <ul className="layer-list">
-          {GEE_AVAILABLE.map((a) => (
-            <li key={a.id}>
-              <span>{a.name}</span>
-              <button
-                className="add-layer-btn"
-                disabled={activeRefs.has(a.sourceRef)}
-                onClick={() => mapStore.addAvailableLayer(a)}
-              >
-                {activeRefs.has(a.sourceRef) ? "ADDED" : "+ ADD"}
-              </button>
-            </li>
-          ))}
-        </ul>
+        {/* GEE Sources — disembunyikan selama belum ada pipeline tile.
+            Menampilkannya hanya membuat pengguna menambah layer yang mustahil
+            digambar, lalu menyimpulkan aplikasinya rusak. */}
+        {!isHidden("geeLayers") && (
+          <>
+            <div className="avail-group-title">GEE Sources</div>
+            <ul className="layer-list">
+              {GEE_AVAILABLE.map((a) => (
+                <li key={a.id}>
+                  <span>{a.name}</span>
+                  <button
+                    className="add-layer-btn"
+                    disabled={activeRefs.has(a.sourceRef)}
+                    onClick={() => mapStore.addAvailableLayer(a)}
+                  >
+                    {activeRefs.has(a.sourceRef) ? "ADDED" : "+ ADD"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
       )}
     </div>
@@ -214,7 +221,7 @@ function LayerItem({
 }) {
   const isBlock = layer.kind === "blocks";
   const isLocked = Boolean(layer.locked);
-  const isAdmin = useIsAdmin();
+  const caps = useCapabilities();
   const error = useMapStore((s) => s.layerErrors[layer.id]);
 
   const notRenderable = layer.kind === "gee";
@@ -256,7 +263,7 @@ function LayerItem({
         </div>
 
         {/* Actions — hanya admin (user = read-only) */}
-        {isAdmin && (
+        {caps.editLayers && (
           <span className="layer-actions">
             <button
               className="layer-zoom-btn"
@@ -298,7 +305,7 @@ function LayerItem({
       </div>
 
       {/* Inline layer properties panel (admin only, if not locked) */}
-      {isEditing && isAdmin && !isLocked && (
+      {isEditing && caps.editLayers && !isLocked && (
         <div className="layer-sym-editor">
           <LayerPropertiesPanel />
         </div>

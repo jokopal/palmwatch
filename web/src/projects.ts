@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
-import type { AvailableLayer, RasterLayerConfig } from "./store/mapStore";
-import { rasterPublicUrl } from "./rasterLayers";
+import type { AvailableLayer } from "./store/mapStore";
+import { overlayForName } from "./rasterOverlays";
 import type { BlockCollection, Summary } from "./types";
 
 // Client untuk model project (multi-kebun) + share link publik.
@@ -124,24 +124,11 @@ export async function getSharedProject(token: string): Promise<SharedProject | n
   }
 
   if (raw.raster_layers && raw.raster_layers.length > 0) {
-    result.rasterLayers = raw.raster_layers.map((r) => {
-      const cfg: RasterLayerConfig = {
-        url: rasterPublicUrl(r.storage_path),
-        colormap: r.colormap ?? undefined,
-        minValue: r.min_value ?? undefined,
-        maxValue: r.max_value ?? undefined,
-        bounds: r.bounds ?? undefined,
-        category: r.category,
-        opacity: r.opacity ?? 1,
-      };
-      return {
-        id: `rast-${r.id}`,
-        name: r.name,
-        group: "raster" as const,
-        sourceRef: r.id,
-        rasterConfig: cfg,
-      };
-    });
+    // Database menentukan raster mana milik project; yang digambar selalu
+    // overlay PNG dari manifest. Raster yang belum diproses skrip dilewati.
+    result.rasterLayers = raw.raster_layers
+      .map((r) => overlayForName(r.name))
+      .filter((x): x is AvailableLayer => Boolean(x));
   }
 
   // Fallback ke kueri tabel bila RPC lama belum mengembalikan vector/raster_layers
@@ -176,29 +163,14 @@ export async function getSharedProject(token: string): Promise<SharedProject | n
     try {
       const { data: rData } = await supabase
         .from("raster_layers")
-        .select("id, name, storage_path, category, bounds, colormap, min_value, max_value, opacity")
+        .select("name")
         .or(`project_id.eq.${raw.project.id},project_id.is.null`)
         .order("created_at", { ascending: false });
 
       if (rData) {
-        result.rasterLayers = rData.map((r) => {
-          const cfg: RasterLayerConfig = {
-            url: rasterPublicUrl(r.storage_path),
-            colormap: r.colormap ?? undefined,
-            minValue: r.min_value ?? undefined,
-            maxValue: r.max_value ?? undefined,
-            bounds: r.bounds ?? undefined,
-            category: r.category,
-            opacity: r.opacity ?? 1,
-          };
-          return {
-            id: `rast-${r.id}`,
-            name: r.name,
-            group: "raster" as const,
-            sourceRef: r.id,
-            rasterConfig: cfg,
-          };
-        });
+        result.rasterLayers = rData
+          .map((r) => overlayForName(r.name))
+          .filter((x): x is AvailableLayer => Boolean(x));
       }
     } catch { /* ignore fallback errors */ }
   }

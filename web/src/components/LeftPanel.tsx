@@ -4,7 +4,7 @@ import UploadTab from "./UploadTab";
 import { mapStore, useMapStore, type AvailableLayer } from "../store/mapStore";
 import { listReferenceLayers } from "../analysisApi";
 import { getVectorLayerGeojson } from "../vectorLayers";
-import { listRasterLayers } from "../rasterLayers";
+import { listRasterOverlays } from "../rasterOverlays";
 import { zoomToLayer } from "../map/zoomToLayer";
 
 interface Props {
@@ -51,7 +51,7 @@ export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Pr
       }
     }).catch(() => {});
 
-    listRasterLayers(projectId).then(mapStore.setRasterLayers).catch(() => {});
+    mapStore.setRasterLayers(listRasterOverlays());
 
     return () => { cancelled = true; };
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -64,7 +64,7 @@ export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Pr
 
   const reloadDbLayers = () => {
     listReferenceLayers(projectId ?? undefined).then(mapStore.setDbLayers).catch(() => {});
-    listRasterLayers(projectId).then(mapStore.setRasterLayers).catch(() => {});
+    mapStore.setRasterLayers(listRasterOverlays());
   };
 
   return (

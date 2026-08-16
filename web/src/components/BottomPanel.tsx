@@ -3,6 +3,7 @@ import type { BlockCollection, Intervention, Timeseries } from "../types";
 import { api, PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
 import { useMapStore } from "../store/mapStore";
 import type { BlockAnalysisSummary, TableRow, AnalysisResult } from "../store/mapStore";
+import { isReady, lockedProps } from "../features";
 import {
   listTemporalLayers, getTemporalSnapshotGeojson,
   type TemporalSnapshot,
@@ -97,16 +98,31 @@ export default function BottomPanel({ data, selectedId, onSelect }: Props) {
           onClick={() => setTab("attributes")}>
           Attribute Table
         </button>
-        <button className={`bp-tab${tab === "temporal" ? " active" : ""}`}
-          onClick={() => setTab("temporal")}>
-          Temporal
-        </button>
-        <button
-          className={`bp-tab${tab === "conclusion" ? " active" : ""}${!hasAnalysis ? " muted" : ""}`}
-          onClick={() => setTab("conclusion")}
-          title={!hasAnalysis ? "Jalankan Run Analysis terlebih dahulu" : undefined}>
-          Conclusion {hasAnalysis && <span className="bp-tab-dot" />}
-        </button>
+        {/* Tab yang belum siap tetap terlihat tapi mati, dengan alasannya —
+            lihat features.ts. Membukanya: ubah state di sana jadi "ready". */}
+        {isReady("temporalTab") ? (
+          <button className={`bp-tab${tab === "temporal" ? " active" : ""}`}
+            onClick={() => setTab("temporal")}>
+            Temporal
+          </button>
+        ) : (
+          <button className="bp-tab is-locked" {...lockedProps("temporalTab")}>
+            Temporal <span className="bp-lock">🔒</span>
+          </button>
+        )}
+
+        {isReady("conclusionTab") ? (
+          <button
+            className={`bp-tab${tab === "conclusion" ? " active" : ""}${!hasAnalysis ? " muted" : ""}`}
+            onClick={() => setTab("conclusion")}
+            title={!hasAnalysis ? "Jalankan Run Analysis terlebih dahulu" : undefined}>
+            Conclusion {hasAnalysis && <span className="bp-tab-dot" />}
+          </button>
+        ) : (
+          <button className="bp-tab is-locked" {...lockedProps("conclusionTab")}>
+            Conclusion <span className="bp-lock">🔒</span>
+          </button>
+        )}
         <div className="bp-layer-name">
           Layer: <b>{activeLayer?.name ?? "(none)"}</b>
           {" "}&middot; {features.length} fitur

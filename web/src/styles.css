@@ -1973,3 +1973,72 @@ h1, h2, h3,
   padding: 2px 0 6px;
   line-height: 1.45;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   FITUR TERKUNCI & PERINGATAN ROLE  (features.ts / capabilities.ts)
+   ───────────────────────────────────────────────────────────────── */
+
+/* Kontrol yang sengaja dimatikan sampai fiturnya siap. Dibuat terlihat
+   "sengaja mati", bukan seperti tombol rusak: kursor help + garis putus. */
+.is-locked,
+button.is-locked:disabled {
+  opacity: 0.45;
+  cursor: help !important;
+  border-style: dashed !important;
+}
+.is-locked:hover { opacity: 0.6; }
+
+.bp-lock {
+  font-size: var(--text-2xs);
+  margin-left: 3px;
+  opacity: 0.8;
+}
+
+.role-error-banner {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  padding: 7px 14px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-bottom: 1px solid rgba(217, 119, 6, 0.3);
+}
+.role-error-banner .reb-reason {
+  color: var(--text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-2xs);
+}
+
+/* ── Panel properti raster (overlay PNG) ───────────────────────────── */
+.lp-raster-info {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle, var(--border));
+  border-radius: var(--r-sm, 6px);
+  padding: 8px 10px;
+  margin-bottom: var(--sp-2, 10px);
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  word-break: break-word;
+}
+.lp-raster-info-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.lp-raster-ramp { margin-top: 3px; }
+.lp-raster-ramp-bar {
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+.lp-raster-ramp-name {
+  font-family: var(--font-data);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}

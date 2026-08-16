@@ -4,7 +4,6 @@ import {
   type ActiveLayer, type Symbology, type LayerClass,
 } from "../store/mapStore";
 import { detectClasses, updateRefLayerMeta } from "../analysisApi";
-import { RASTER_COLORMAPS } from "../map/colormaps";
 
 // Panel properti layer terpadu.
 //
@@ -119,26 +118,37 @@ export default function LayerPropertiesPanel() {
         </div>
       )}
 
-      {/* ── RASTER (COG) ─────────────────────────────────────────── */}
+      {/* ── RASTER (overlay PNG) ─────────────────────────────────── */}
       {isRasterLayer && raster && (
         <>
-          <div className="lp-section-title">Informasi TIFF & Raster</div>
+          <div className="lp-section-title">Informasi Raster</div>
 
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", padding: "8px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "12px", display: "flex", flexDirection: "column", gap: "5px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span><b>Kategori:</b> {raster.category ? raster.category.toUpperCase() : "OTHER"}</span>
-              <span className="lp-kind-badge lk-raster" style={{ fontSize: "9px" }}>COG PROTOCOL</span>
+          <div className="lp-raster-info">
+            <div className="lp-raster-info-head">
+              <span><b>Kategori:</b> {(raster.category ?? "other").toUpperCase()}</span>
+              <span className="lp-kind-badge lk-raster">PNG OVERLAY</span>
             </div>
-            <div><b>Protocol URL:</b> <span className="bd-code" style={{ fontSize: "10px", wordBreak: "break-all" }}>{`cog://${raster.url}`}</span></div>
             {raster.bounds && (
-              <div><b>BBox (EPSG:4326):</b> [{raster.bounds.map((n) => n.toFixed(3)).join(", ")}]</div>
+              <div><b>BBox (EPSG:4326):</b> [{raster.bounds.map((n) => n.toFixed(4)).join(", ")}]</div>
             )}
-            <div style={{ color: "var(--text-muted)", fontSize: "10px" }}>
-              <b>Nilai Aktif:</b> {raster.minValue != null ? Number(raster.minValue).toFixed(2) : "auto"} s.d. {raster.maxValue != null ? Number(raster.maxValue).toFixed(2) : "auto"} ({raster.colormap ?? "Default"})
+            <div>
+              <b>Rentang nilai:</b>{" "}
+              {raster.minValue != null ? Number(raster.minValue).toFixed(2) : "—"}
+              {" s.d. "}
+              {raster.maxValue != null ? Number(raster.maxValue).toFixed(2) : "—"}
             </div>
+            {raster.legend?.length ? (
+              <div className="lp-raster-ramp">
+                <div
+                  className="lp-raster-ramp-bar"
+                  style={{ background: `linear-gradient(90deg, ${raster.legend.join(", ")})` }}
+                />
+                <div className="lp-raster-ramp-name">{raster.colormap}</div>
+              </div>
+            ) : null}
           </div>
 
-          <div className="lp-section-title">Tampilan Raster</div>
+          <div className="lp-section-title">Tampilan</div>
 
           <div className="sym-row">
             <label>Opacity</label>
@@ -147,72 +157,10 @@ export default function LayerPropertiesPanel() {
             <span className="sym-val">{Math.round(raster.opacity * 100)}%</span>
           </div>
 
-          <div className="sym-row">
-            <label>Skema warna</label>
-            <select
-              value={raster.colormap ?? "BrewerSpectral9"}
-              onChange={(e) => mapStore.updateRasterConfig(layer.id, { colormap: e.target.value || undefined })}
-            >
-              {RASTER_COLORMAPS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-
-          <div className="sym-row">
-            <label>Rentang Nilai</label>
-            <input type="number" className="lp-text-input sm" value={raster.minValue ?? ""}
-              placeholder="min (e.g. -0.2)"
-              onChange={(e) => mapStore.updateRasterConfig(layer.id, {
-                minValue: e.target.value === "" ? undefined : Number(e.target.value),
-              })} />
-            <input type="number" className="lp-text-input sm" value={raster.maxValue ?? ""}
-              placeholder="max (e.g. 1.0)"
-              onChange={(e) => mapStore.updateRasterConfig(layer.id, {
-                maxValue: e.target.value === "" ? undefined : Number(e.target.value),
-              })} />
-          </div>
-
-          {/* Quick Presets */}
-          <div className="sym-row" style={{ alignItems: "center" }}>
-            <label style={{ fontSize: "11px" }}>Preset Cepat</label>
-            <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="add-layer-btn"
-                style={{ padding: "2px 6px", fontSize: "10px" }}
-                onClick={() => mapStore.updateRasterConfig(layer.id, { category: "ndvi", colormap: "Viridis", minValue: -0.2, maxValue: 1.0 })}
-              >
-                NDVI
-              </button>
-              <button
-                type="button"
-                className="add-layer-btn"
-                style={{ padding: "2px 6px", fontSize: "10px" }}
-                onClick={() => mapStore.updateRasterConfig(layer.id, { category: "dem", colormap: "BrewerSpectral9", minValue: 0, maxValue: 500 })}
-              >
-                DEM
-              </button>
-              <button
-                type="button"
-                className="add-layer-btn"
-                style={{ padding: "2px 6px", fontSize: "10px" }}
-                onClick={() => mapStore.updateRasterConfig(layer.id, { category: "lst", colormap: "Magma", minValue: 15, maxValue: 45 })}
-              >
-                LST
-              </button>
-              <button
-                type="button"
-                className="add-layer-btn"
-                style={{ padding: "2px 6px", fontSize: "10px" }}
-                onClick={() => mapStore.updateRasterConfig(layer.id, { category: "rainfall", colormap: "Blues", minValue: 0, maxValue: 500 })}
-              >
-                Rain
-              </button>
-            </div>
-          </div>
-
           <div className="lp-hint">
-            Mengubah skema warna atau rentang akan memuat ulang ubin raster
-            (nilainya tertanam di URL protokol <span className="bd-code">cog://</span>).
+            Warna raster dipanggang saat build agar dijamin tampil di peta.
+            Untuk mengganti skema warna atau rentang nilai, jalankan ulang{" "}
+            <span className="bd-code">scripts/build_raster_overlays.py</span>.
           </div>
         </>
       )}

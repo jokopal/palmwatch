@@ -5,6 +5,7 @@ import { insertRefLayer, detectClasses } from "../analysisApi";
 import { importProjectBlocks } from "../projects";
 import { mapStore } from "../store/mapStore";
 import { RASTER_CATEGORIES, RASTER_COLORMAPS } from "../map/colormaps";
+import { isReady, lockReason, type FeatureKey } from "../features";
 import type { LayerClass, TableLayerConfig } from "../store/mapStore";
 
 type FC = GeoJSON.FeatureCollection;
@@ -173,24 +174,10 @@ export default function UploadTab({ projectId, onImported, onRefLayersChanged, o
           setRasterFile(null); setName(""); setRasterColormap(""); setRasterMin(""); setRasterMax("");
           onRastersChanged?.();
         } else {
-          // Fallback ke local preview bila Supabase DB / Storage tidak tersedia
-          const blobUrl = URL.createObjectURL(rasterFile);
-          mapStore.addRasterLayer({
-            id: `local-rast-${Date.now()}`,
-            name: name.trim(),
-            group: "raster",
-            sourceRef: `local-${Date.now()}`,
-            rasterConfig: {
-              url: blobUrl,
-              category: rasterCategory,
-              colormap: rasterColormap || undefined,
-              minValue: rasterMin !== "" ? Number(rasterMin) : undefined,
-              maxValue: rasterMax !== "" ? Number(rasterMax) : undefined,
-              opacity: 1,
-            },
-          });
-          setMsg(`Raster "${name.trim()}" dimuat ke sesi lokal.`);
-          setRasterFile(null); setName(""); setRasterColormap(""); setRasterMin(""); setRasterMax("");
+          // Tidak ada lagi fallback pratinjau lokal: raster digambar dari
+          // overlay PNG hasil build_raster_overlays.py, sehingga blob GeoTIFF
+          // di browser tidak bisa ditampilkan sama sekali.
+          setErr(res.error ?? "Upload raster gagal.");
         }
 
       } else {
@@ -239,19 +226,34 @@ export default function UploadTab({ projectId, onImported, onRefLayersChanged, o
 
       {/* Mode selector */}
       <div className="upload-mode">
-        {(["reference", "table", "raster"] as Mode[]).map((m) => (
-          <label key={m} className={mode === m ? "on" : ""}>
-            <input type="radio" checked={mode === m} onChange={() => { setMode(m); setMsg(null); setErr(null); }} />
-            {modeLabels[m]}
-          </label>
-        ))}
+        {(["reference", "table", "raster"] as Mode[]).map((m) => {
+          // Unggah raster terkunci: berkas yang diunggah baru bisa tampil
+          // setelah diproses build_raster_overlays.py, jadi membiarkannya
+          // terbuka hanya menghasilkan raster yang "hilang" di peta.
+          const locked = m === "raster" ? !isReady("rasterUpload") : m === "table" && !isReady("productionData");
+          const key: FeatureKey = m === "raster" ? "rasterUpload" : "productionData";
+          if (locked) {
+            return (
+              <label key={m} className="is-locked" title={lockReason(key)}>
+                <input type="radio" disabled checked={false} readOnly />
+                {modeLabels[m]} 🔒
+              </label>
+            );
+          }
+          return (
+            <label key={m} className={mode === m ? "on" : ""}>
+              <input type="radio" checked={mode === m} onChange={() => { setMode(m); setMsg(null); setErr(null); }} />
+              {modeLabels[m]}
+            </label>
+          );
+        })}
       </div>
 
       {/* Hint */}
       <p className="upload-hint">
         {mode === "reference" && "Upload layer vektor (SHP/GeoJSON) sebagai layer referensi dan/atau batas blok AOI."}
         {mode === "table" && "Upload Excel/CSV berisi data produksi lapangan. Di-join ke blok via block_id."}
-        {mode === "raster" && "Upload Cloud-Optimized GeoTIFF (DEM, tanah, TWI, dll.). Ditampilkan via range-request & dapat di-clip ke boundary."}
+        {mode === "raster" && "Upload GeoTIFF sumber. Raster tampil di peta setelah diproses jadi overlay PNG oleh scripts/build_raster_overlays.py."}
       </p>
 
       {/* ── Spatial file input ─────────────────────────────────── */}

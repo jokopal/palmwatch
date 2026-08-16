@@ -1,24 +1,15 @@
 import { getCogMetadata } from "@geomatico/maplibre-cog-protocol";
 import { supabase } from "./supabase";
-import type { AvailableLayer, RasterLayerConfig } from "./store/mapStore";
 
-// CRUD raster COG (tabel public.raster_layers + bucket Storage 'rasters', via
-// PostgREST + RLS). File biner disimpan sebagai Cloud-Optimized GeoTIFF dan
-// di-render di client via maplibre-cog-protocol (range request) — tanpa server tile.
+// Pengelolaan berkas raster sumber: unggah GeoTIFF ke bucket Storage 'rasters'
+// dan catat metadatanya di public.raster_layers.
+//
+// Berkas ini TIDAK lagi menyediakan katalog untuk peta. Yang digambar adalah
+// overlay PNG hasil scripts/build_raster_overlays.py, dikatalogkan oleh
+// rasterOverlays.ts. getCogMetadata masih dipakai di sini hanya untuk membaca
+// bbox & rentang nilai saat unggah, bukan untuk menggambar.
 
 const BUCKET = "rasters";
-
-interface RasterRow {
-  id: string;
-  name: string;
-  storage_path: string;
-  category: string;
-  bounds: [number, number, number, number] | null;
-  colormap: string | null;
-  min_value: number | null;
-  max_value: number | null;
-  opacity: number | null;
-}
 
 /** URL publik ke file COG di bucket 'rasters'. */
 export function rasterPublicUrl(storagePath: string): string {
@@ -26,71 +17,8 @@ export function rasterPublicUrl(storagePath: string): string {
   return supabase.storage.from(BUCKET).getPublicUrl(storagePath).data.publicUrl;
 }
 
-function rowToAvailable(r: RasterRow): AvailableLayer {
-  const cfg: RasterLayerConfig = {
-    url: rasterPublicUrl(r.storage_path),
-    colormap: r.colormap ?? undefined,
-    minValue: r.min_value ?? undefined,
-    maxValue: r.max_value ?? undefined,
-    bounds: r.bounds ?? undefined,
-    category: r.category,
-    opacity: r.opacity ?? 1,
-  };
-  return {
-    id: `rast-${r.id}`,
-    name: r.name,
-    group: "raster",
-    sourceRef: r.id,
-    rasterConfig: cfg,
-  };
-}
-
-import defaultCogs from "./defaultCogs.json";
-
-function getDefaultRasterLayers(): AvailableLayer[] {
-  return (defaultCogs as Array<{
-    id: string;
-    name: string;
-    url: string;
-    category: string;
-    colormap: string;
-    minValue: number;
-    maxValue: number;
-    bounds: [number, number, number, number];
-  }>).map((c) => ({
-    id: `rast-${c.id}`,
-    name: c.name,
-    group: "raster" as const,
-    sourceRef: c.id,
-    rasterConfig: {
-      url: c.url,
-      colormap: c.colormap,
-      minValue: c.minValue,
-      maxValue: c.maxValue,
-      bounds: c.bounds,
-      category: c.category,
-      opacity: 1,
-    },
-  }));
-}
-
-/** Daftar raster untuk project (+ raster global project_id null). */
-export async function listRasterLayers(projectId: string | null): Promise<AvailableLayer[]> {
-  if (!supabase) return getDefaultRasterLayers();
-  let q = supabase
-    .from("raster_layers")
-    .select("id,name,storage_path,category,bounds,colormap,min_value,max_value,opacity")
-    .order("created_at", { ascending: false });
-  // RLS sudah membatasi ke member; filter tambahan agar hanya project aktif + global.
-  if (projectId) q = q.or(`project_id.eq.${projectId},project_id.is.null`);
-  const { data, error } = await q;
-  if (error || !data || data.length === 0) {
-    if (error) console.warn("listRasterLayers:", error.message);
-    return getDefaultRasterLayers();
-  }
-  const dbLayers = (data as RasterRow[]).map(rowToAvailable);
-  return [...dbLayers, ...getDefaultRasterLayers().filter((d) => !dbLayers.some((b) => b.name === d.name))];
-}
+// Katalog raster untuk tampilan sudah pindah ke rasterOverlays.ts (manifest
+// PNG). Berkas ini kini hanya mengurus unggah & hapus berkas sumber.
 
 export interface InsertRasterMeta {
   projectId: string | null;

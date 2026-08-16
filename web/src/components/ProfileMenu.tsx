@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase, emailToUsername } from "../supabase";
-import { useAuth } from "../auth";
+import { useRole } from "../auth";
 
 interface Props {
   session: { user?: { email?: string } } | null;
@@ -11,7 +11,7 @@ interface Props {
 export default function ProfileMenu({ session }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { role } = useAuth();
+  const role = useRole();
 
   const email = session?.user?.email ?? "";
   const username = emailToUsername(email) || "guest";

@@ -24,6 +24,8 @@ import { mapStore, useMapStore } from "./store/mapStore";
 import { useIsMobile } from "./useMediaQuery";
 import { listProjects, type Project } from "./projects";
 import { AuthProvider, fetchMyRole } from "./auth";
+import { capabilitiesFor, type Role } from "./capabilities";
+import { isReady } from "./features";
 import type { BlockCollection, Summary } from "./types";
 
 // Deteksi mode share publik (?share=<token>) sekali di awal.
@@ -74,37 +76,53 @@ export default function App() {
     return () => authListener.subscription.unsubscribe();
   }, []);
 
-  const previewBypass = Boolean(import.meta.env.VITE_PREVIEW_NO_AUTH);
+  // Bypass auth hanya untuk pengembangan lokal. import.meta.env.DEV di-inline
+  // saat build, sehingga seluruh cabang ini hilang dari bundel produksi —
+  // sebuah VITE_PREVIEW_NO_AUTH yang tak sengaja terbawa tidak bisa lagi
+  // memberi akses tanpa login.
+  const previewBypass = import.meta.env.DEV && Boolean(import.meta.env.VITE_PREVIEW_NO_AUTH);
   const authed = !authChecking && Boolean(session || !supabase || previewBypass);
 
-  // Role (Fase 2 RBAC) — dari public.users; di preview via VITE_PREVIEW_ROLE.
-  const [role, setRole] = useState<"admin" | "user">("user");
-  const isAdmin = role === "admin";
-  // `role` default "user" sebelum fetchMyRole selesai — tandai kapan nilainya
-  // benar-benar diketahui agar keputusan berbasis role tidak salah start.
-  const [roleResolved, setRoleResolved] = useState(false);
+  // Role (Fase 2 RBAC) — dari public.users. Mulai dari "loading": selama role
+  // belum diketahui, capabilitiesFor() tidak memberi izin apa pun sehingga
+  // kontrol admin tidak pernah berkedip muncul lalu hilang.
+  const [role, setRole] = useState<Role>("loading");
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const caps = capabilitiesFor(role);
   const [showUsers, setShowUsers] = useState(false);
+
   useEffect(() => {
     if (!authed) return;
     if (previewBypass) {
-      setRole(import.meta.env.VITE_PREVIEW_ROLE === "user" ? "user" : "admin");
-      setRoleResolved(true);
-    } else {
-      fetchMyRole()
-        .then(setRole)
-        .catch(() => setRole("user"))
-        .finally(() => setRoleResolved(true));
+      // Preview dev wajib menyebut rolenya eksplisit. Tidak ada lagi default
+      // ke admin: salah ketik nilai env dulu berarti akses penuh tanpa login.
+      const r = import.meta.env.VITE_PREVIEW_ROLE;
+      setRole(r === "admin" ? "admin" : "user");
+      return;
     }
+    let cancelled = false;
+    fetchMyRole().then((res) => {
+      if (cancelled) return;
+      if (res.ok) {
+        setRole(res.role);
+        setRoleError(null);
+      } else {
+        // Gagal menentukan role = akses paling terbatas, tapi katakan sebabnya.
+        setRole("guest");
+        setRoleError(res.reason);
+      }
+    });
+    return () => { cancelled = true; };
   }, [authed, session, previewBypass]);
 
-  // Role `user` memakai UserPanel (tanpa manajer layer), jadi ia tak punya cara
+  // Non-admin memakai UserPanel (tanpa manajer layer), jadi tak punya cara
   // mengaktifkan layer blok sendiri. Aktifkan otomatis — kalau tidak, tampilan
   // viewer hanya basemap kosong. Admin tetap mulai dari kanvas bersih dan
   // memilih layernya sendiri lewat Available Layers.
   useEffect(() => {
-    if (!roleResolved || isAdmin) return;
+    if (role === "loading" || caps.editLayers) return;
     mapStore.addBlocksLayer();
-  }, [roleResolved, isAdmin]);
+  }, [role, caps.editLayers]);
 
   const reloadProjects = () => {
     listProjects().then((ps) => {
@@ -157,12 +175,12 @@ export default function App() {
   // If Supabase is enabled and no session, show Login.
   // VITE_PREVIEW_NO_AUTH (dev-only, opt-in) melewati gerbang auth untuk keperluan
   // preview/verifikasi UI peta tanpa sesi. JANGAN diaktifkan di production.
-  if (supabase && !session && !import.meta.env.VITE_PREVIEW_NO_AUTH) {
+  if (supabase && !session && !previewBypass) {
     return <Login />;
   }
 
   return (
-    <AuthProvider value={{ isAdmin, role }}>
+    <AuthProvider role={role}>
     <div className={`app${isMobile ? " app--mobile" : ""}`}>
       <header className="header">
         <div className="brand">
@@ -180,7 +198,7 @@ export default function App() {
         <ProjectSwitcher
           projects={projects}
           currentId={projectId}
-          canManage={isAdmin}
+          canManage={caps.manageProjects}
           onSwitch={setProjectId}
           onProjectsChanged={reloadProjects}
         />
@@ -216,7 +234,7 @@ export default function App() {
               )}
             </div>
           )}
-          {isAdmin && (
+          {caps.manageUsers && (
             <button className="header-admin-btn" onClick={() => setShowUsers(true)} title="Kelola user & akses project">
               ⚙ User
             </button>
@@ -225,7 +243,14 @@ export default function App() {
         </div>
       </header>
 
-      {isAdmin && showUsers && (
+      {roleError && (
+        <div className="role-error-banner">
+          Hak akses tidak dapat dipastikan, jadi aplikasi dibuka dalam mode
+          paling terbatas. <span className="reb-reason">{roleError}</span>
+        </div>
+      )}
+
+      {caps.manageUsers && showUsers && (
         <AdminUsers
           projects={projects}
           currentUserId={session?.user?.id}
@@ -242,7 +267,6 @@ export default function App() {
           onSelect={setSelectedId}
           projects={projects}
           projectId={projectId}
-          isAdmin={isAdmin}
           error={error}
           onMapLoad={setMainMap}
           onBlocksImported={() => { reloadProjects(); reloadData(); }}
@@ -250,7 +274,7 @@ export default function App() {
       ) : (
       <>
       {/* Analysis toolbar — admin only (menulis hasil ke DB) */}
-      {isAdmin && <AnalysisBar projectId={projectId} />}
+      {caps.runAnalysis && isReady("analysis") && <AnalysisBar projectId={projectId} />}
 
       <div className="body">
         <PanelGroup orientation="horizontal">
@@ -336,9 +360,9 @@ export default function App() {
 
           {/* Right Area — admin: layer workspace; user: viewer + input stub */}
           <Panel defaultSize={25} minSize={0} collapsible={true}>
-            {isAdmin ? (
+            {caps.editLayers ? (
               <LeftPanel
-                canUpload={isAdmin}
+                canUpload={caps.uploadData}
                 projectId={projectId}
                 onBlocksImported={() => { reloadProjects(); reloadData(); }}
               />

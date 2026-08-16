@@ -8,6 +8,8 @@ import LeftPanel from "./LeftPanel";
 import UserPanel from "./UserPanel";
 import BottomPanel from "./BottomPanel";
 import AnalysisBar from "./AnalysisBar";
+import { useCapabilities } from "../auth";
+import { isReady } from "../features";
 import MobileSheet from "./MobileSheet";
 import BlockPanel from "./BlockPanel";
 import LoadingOverlay from "./LoadingOverlay";
@@ -24,7 +26,6 @@ interface Props {
   onSelect: (id: string) => void;
   projects: Project[];
   projectId: string | null;
-  isAdmin: boolean;
   error: string | null;
   onMapLoad: (map: maplibregl.Map) => void;
   onBlocksImported: () => void;
@@ -37,7 +38,7 @@ interface Props {
  */
 export default function MobileShell({
   data, summary, selectedId, selectedFeature, onSelect, projects, projectId,
-  isAdmin, error, onMapLoad, onBlocksImported,
+  error, onMapLoad, onBlocksImported,
 }: Props) {
   const [tab, setTab] = useState<Tab>("map");
   const [expanded, setExpanded] = useState(false);
@@ -54,7 +55,8 @@ export default function MobileShell({
     if (tab === "map") setTab("analysis");
   };
 
-  const panelTitle = isAdmin ? "Layer & Data" : "Info Kebun";
+  const caps = useCapabilities();
+  const panelTitle = caps.editLayers ? "Layer & Data" : "Info Kebun";
   const activeProject = projects.find((p) => p.id === projectId);
 
   return (
@@ -76,8 +78,8 @@ export default function MobileShell({
         onToggleExpand={() => setExpanded((v) => !v)}
         onClose={closeSheet}
       >
-        {isAdmin ? (
-          <LeftPanel canUpload={isAdmin} projectId={projectId} onBlocksImported={onBlocksImported} />
+        {caps.editLayers ? (
+          <LeftPanel canUpload={caps.uploadData} projectId={projectId} onBlocksImported={onBlocksImported} />
         ) : (
           <UserPanel project={activeProject} summary={summary} />
         )}
@@ -91,7 +93,7 @@ export default function MobileShell({
         onToggleExpand={() => setExpanded((v) => !v)}
         onClose={closeSheet}
       >
-        {isAdmin && <AnalysisBar projectId={projectId} />}
+        {caps.runAnalysis && isReady("analysis") && <AnalysisBar projectId={projectId} />}
         {/* Detail blok terpilih tampil lebih dulu — itu yang dicari di lapangan. */}
         {selectedFeature && <BlockPanel feature={selectedFeature} embedded />}
         <BottomPanel data={data} selectedId={selectedId} onSelect={onSelect} />
@@ -103,8 +105,8 @@ export default function MobileShell({
           <span className="m-tab-icon">🗺️</span><span className="m-tab-label">Peta</span>
         </button>
         <button className={`m-tab ${tab === "panel" ? "active" : ""}`} onClick={() => openTab("panel")}>
-          <span className="m-tab-icon">{isAdmin ? "🧩" : "📋"}</span>
-          <span className="m-tab-label">{isAdmin ? "Layer" : "Info"}</span>
+          <span className="m-tab-icon">{caps.editLayers ? "🧩" : "📋"}</span>
+          <span className="m-tab-label">{caps.editLayers ? "Layer" : "Info"}</span>
         </button>
         <button className={`m-tab ${tab === "analysis" ? "active" : ""}`} onClick={() => openTab("analysis")}>
           <span className="m-tab-icon">📊</span><span className="m-tab-label">Analisis</span>
