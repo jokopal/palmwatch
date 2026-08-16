@@ -18,14 +18,14 @@ import random
 from datetime import date
 from typing import Dict, List
 
-# Titik acuan pilot (Kalimantan Timur, sama dengan blocks_example.geojson)
-ORIGIN_LON = 117.120
-ORIGIN_LAT = -0.555
+# Titik acuan pilot (Kebun 77 - Kotawaringin)
+ORIGIN_LON = 111.700
+ORIGIN_LAT = -2.560
 CELL = 0.015  # ~1.6 km per sisi blok
 GRID_COLS = 4
 GRID_ROWS = 3
 
-ESTATE = "Kalimantan Timur Estate A"
+ESTATE = "Kebun 77 - Kotawaringin"
 
 # Matriks intervensi ringkas (selaras processors/overlay.py)
 INTERVENTION_LIBRARY = {

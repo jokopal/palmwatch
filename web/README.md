@@ -63,7 +63,5 @@ Header KPI menampilkan badge `data: sample` saat fallback aktif, atau
 
 Set `POSTGIS_*` di `.env` (lihat `.env.example`) lalu jalankan pipeline Fase 1
 agar tabel `block_conditions` & `eo_readings` terisi. `api/data_source.py` akan
-otomatis beralih ke sumber `postgis`. (Catatan: pembacaan PostGIS di
-`data_source.py` saat ini memakai fallback sample sebagai placeholder hingga
-query baca diimplementasikan — lihat TODO di file tersebut.)
+otomatis beralih ke sumber `postgis` bila tabel terisi, atau fallback ke sample generator.
 ```

@@ -5,6 +5,7 @@ import { mapStore, useMapStore, type AvailableLayer } from "../store/mapStore";
 import { listReferenceLayers } from "../analysisApi";
 import { getVectorLayerGeojson } from "../vectorLayers";
 import { listRasterLayers } from "../rasterLayers";
+import { zoomToLayer } from "../map/zoomToLayer";
 
 interface Props {
   canUpload: boolean;
@@ -17,20 +18,53 @@ interface Props {
 export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Props) {
   const tab = useMapStore((s) => s.leftTab);
 
-  // Muat semua layer DB (reference + generic) sekali di awal dan setelah upload
-  const loadDbLayers = () => {
-    listReferenceLayers(projectId ?? undefined).then(mapStore.setDbLayers).catch(() => {});
-    listRasterLayers(projectId).then(mapStore.setRasterLayers).catch(() => {});
-  };
-
+  // Muat semua layer DB (reference + generic) sekali di awal dan setelah upload.
+  // Startup: auto-tambah + zoom ke reference layer terbaru (tidak ada default layer).
   useEffect(() => {
-    loadDbLayers();
+    let cancelled = false;
+
+    listReferenceLayers(projectId ?? undefined).then((layers) => {
+      if (cancelled) return;
+      mapStore.setDbLayers(layers);
+
+      const refs = layers.filter((l) => l.layerRole === "reference");
+      const latest = refs[0]; // API sudah order created_at desc → terbaru di index 0
+      if (latest?.sourceRef) {
+        const existing = mapStore.getState().activeLayers.find(
+          (l) => l.sourceRef === latest.sourceRef,
+        );
+        if (existing) {
+          zoomToLayer(existing);
+        } else {
+          getVectorLayerGeojson(latest.sourceRef).then((g) => {
+            if (cancelled || !g) return;
+            mapStore.addDbLayer(latest, g);
+            const added = mapStore.getState().activeLayers.find(
+              (l) => l.sourceRef === latest.sourceRef,
+            );
+            if (added) zoomToLayer(added);
+          }).catch(() => {});
+        }
+      } else {
+        const blk = mapStore.getState().activeLayers.find((l) => l.kind === "blocks");
+        if (blk) zoomToLayer(blk);
+      }
+    }).catch(() => {});
+
+    listRasterLayers(projectId).then(mapStore.setRasterLayers).catch(() => {});
+
+    return () => { cancelled = true; };
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddDb = async (a: AvailableLayer) => {
     if (!a.sourceRef) return;
     const geojson = await getVectorLayerGeojson(a.sourceRef);
     if (geojson) mapStore.addDbLayer(a, geojson);
+  };
+
+  const reloadDbLayers = () => {
+    listReferenceLayers(projectId ?? undefined).then(mapStore.setDbLayers).catch(() => {});
+    listRasterLayers(projectId).then(mapStore.setRasterLayers).catch(() => {});
   };
 
   return (
@@ -60,8 +94,8 @@ export default function LeftPanel({ canUpload, projectId, onBlocksImported }: Pr
             onClose={() => mapStore.setLeftTab("layers")}
             projectId={projectId}
             onImported={onBlocksImported}
-            onRefLayersChanged={() => { loadDbLayers(); mapStore.setLeftTab("layers"); }}
-            onRastersChanged={() => { loadDbLayers(); mapStore.setLeftTab("layers"); }}
+            onRefLayersChanged={() => { reloadDbLayers(); mapStore.setLeftTab("layers"); }}
+            onRastersChanged={() => { reloadDbLayers(); mapStore.setLeftTab("layers"); }}
           />
         )}
       </div>

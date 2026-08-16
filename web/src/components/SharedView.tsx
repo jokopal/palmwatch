@@ -1,19 +1,61 @@
 import { useEffect, useState } from "react";
 import MapView from "./MapView";
 import BasemapSwitcher from "./BasemapSwitcher";
+import FloatingLegend from "./FloatingLegend";
 import { getSharedProject, type SharedProject } from "../projects";
+import { mapStore, useMapStore } from "../store/mapStore";
 import { PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
+import { zoomToLayer } from "../map/zoomToLayer";
 
-// Tampilan publik read-only untuk petani via share link (?share=<token>).
-// Tanpa login, tanpa editing — hanya peta + ringkasan kondisi kebun.
+// Tampilan publik read-only untuk pengguna via share link (?share=<token>).
+// Menampilkan hasil pengeditan aktual layer (vektor + raster + simbologi) oleh admin.
 export default function SharedView({ token }: { token: string }) {
   const [shared, setShared] = useState<SharedProject | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "notfound">("loading");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showLayers, setShowLayers] = useState(false);
+
+  const activeLayers = useMapStore((s) => s.activeLayers);
 
   useEffect(() => {
     getSharedProject(token).then((d) => {
-      if (d) { setShared(d); setState("ok"); } else setState("notfound");
+      if (d) {
+        setShared(d);
+        setState("ok");
+
+        // Set up active layers pada store
+        mapStore.addBlocksLayer();
+
+        // Tambah semua layer vektor aktual buatan admin
+        if (d.vectorLayers?.length) {
+          for (const vl of d.vectorLayers) {
+            if (vl.geojson) {
+              mapStore.addDbLayer(vl, vl.geojson);
+              // Kunci layer agar read-only bagi viewer
+              const layerId = mapStore.getState().activeLayers.find((l) => l.sourceRef === vl.sourceRef)?.id;
+              if (layerId) mapStore.toggleLayerLock(layerId);
+            }
+          }
+        }
+
+        // Tambah semua layer raster COG buatan admin
+        if (d.rasterLayers?.length) {
+          for (const rl of d.rasterLayers) {
+            mapStore.addRasterLayer(rl);
+            const layerId = mapStore.getState().activeLayers.find((l) => l.sourceRef === rl.sourceRef)?.id;
+            if (layerId) mapStore.toggleLayerLock(layerId);
+          }
+        }
+
+        // Auto zoom ke reference layer / blok utama
+        setTimeout(() => {
+          const refLyr = mapStore.getState().activeLayers.find((l) => l.kind === "reference")
+            || mapStore.getState().activeLayers[0];
+          if (refLyr) zoomToLayer(refLyr);
+        }, 300);
+      } else {
+        setState("notfound");
+      }
     }).catch(() => setState("notfound"));
   }, [token]);
 
@@ -48,14 +90,22 @@ export default function SharedView({ token }: { token: string }) {
           <span style={{ fontFamily: 'var(--font-data)' }}>{s.total_area_ha} ha</span>
           <span className="k-crit" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.critical} kritis</span>
           <span className="k-ok" style={{ fontFamily: 'var(--font-data)' }}>{s.by_priority.normal} sehat</span>
+          <button
+            className={`map-tool-btn${showLayers ? " active" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "12px", background: "var(--bg-card)", border: "1px solid var(--border-default)", color: "var(--text-main)", borderRadius: "4px", cursor: "pointer" }}
+            onClick={() => setShowLayers(!showLayers)}
+          >
+            🥞 Active Layers ({activeLayers.length})
+          </button>
           <span className="share-badge">Tampilan publik · read-only</span>
         </div>
       </header>
 
-      <div className="share-body">
+      <div className="share-body" style={{ position: "relative" }}>
         <div className="main-map-wrap">
           <MapView data={shared.blocks} selectedId={selectedId} onSelect={setSelectedId} />
           <BasemapSwitcher />
+          <FloatingLegend />
           <div className="map-legend">
             <div className="map-legend-title">Status blok</div>
             {(["critical", "warning", "monitor", "normal"] as const).map((k) => (
@@ -66,6 +116,30 @@ export default function SharedView({ token }: { token: string }) {
             ))}
           </div>
         </div>
+
+        {/* View-Only Layer Drawer */}
+        {showLayers && (
+          <aside className="share-detail" style={{ width: "280px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 style={{ margin: 0, fontSize: "14px" }}>Daftar Layer ({activeLayers.length})</h3>
+              <button onClick={() => setShowLayers(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>✕</button>
+            </div>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {activeLayers.map((l) => (
+                <li key={l.id} style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-card)", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-subtle)", fontSize: "12px" }}>
+                  <input
+                    type="checkbox"
+                    checked={l.visible}
+                    onChange={() => mapStore.toggleLayerVisible(l.id)}
+                  />
+                  <span className={`layer-kind-dot lk-${l.kind}`} />
+                  <span style={{ flex: 1, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</span>
+                  <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>🔒</span>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )}
 
         {selected && (
           <aside className="share-detail">

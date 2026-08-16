@@ -5,14 +5,15 @@ import {
 } from "../store/mapStore";
 import LayerPropertiesPanel from "./LayerPropertiesPanel";
 import { useIsAdmin } from "../auth";
+import { canZoomToLayer, zoomToLayer } from "../map/zoomToLayer";
 
 interface Props {
   onAddDb: (a: AvailableLayer) => void;
 }
 
 const KIND_LABEL: Record<string, string> = {
-  blocks:    "BLOCK",
-  reference: "REF",
+  blocks:    "REF/AOI",
+  reference: "REF/AOI",
   gee:       "GEE",
   db:        "DB",
   raster:    "COG",
@@ -30,6 +31,7 @@ export default function LayersTab({ onAddDb }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const activeRefs = new Set(activeLayers.map((l) => l.sourceRef));
+  const hasBlocks = activeLayers.some((l) => l.kind === "blocks");
 
   const toggleEdit = (id: string) => {
     setEditingId((cur) => {
@@ -61,6 +63,13 @@ export default function LayersTab({ onAddDb }: Props) {
             Tambah Reference Layer untuk mengaktifkan analisis intersect.
           </div>
         ))}
+
+        {activeLayers.length > 1 && (
+          <div className="layer-stack-hint">
+            Urutan daftar = urutan gambar (teratas menutupi yang di bawah).
+            Raster selalu digambar di bawah seluruh layer vektor.
+          </div>
+        )}
 
         <ul className="active-layer-list">
           {activeLayers.map((l, idx) => (
@@ -98,42 +107,38 @@ export default function LayersTab({ onAddDb }: Props) {
       <div className="sidebar-section" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         <h3 className="sidebar-title">Available Layers</h3>
 
-        {/* GEE Sources */}
-        <div className="avail-group-title">GEE Sources</div>
+        {/* Lapisan Referensi & AOI — gabungan Blok utama (AOI) & Reference layers */}
+        <div className="avail-group-title">Lapisan Referensi & AOI</div>
         <ul className="layer-list">
-          {GEE_AVAILABLE.map((a) => (
-            <li key={a.id}>
-              <span>{a.name}</span>
-              <button
-                className="add-layer-btn"
-                disabled={activeRefs.has(a.sourceRef)}
-                onClick={() => mapStore.addAvailableLayer(a)}
-              >
-                {activeRefs.has(a.sourceRef) ? "ADDED" : "+ ADD"}
-              </button>
+          <li>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
+              <span>Harvest Blocks</span>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+                AOI · Batas blok kebun & area penelitian
+              </span>
+            </div>
+            <button
+              className="add-layer-btn"
+              disabled={hasBlocks}
+              onClick={() => mapStore.addBlocksLayer()}
+            >
+              {hasBlocks ? "ACTIVE" : "+ ADD"}
+            </button>
+          </li>
+          {dbLayers.length === 0 ? (
+            <li className="avail-empty" style={{ listStyle: "none" }}>
+              Belum ada reference layer tambahan. Upload file di tab <b>Upload</b>.
             </li>
-          ))}
-        </ul>
-
-        {/* Reference + DB Sources */}
-        <div className="avail-group-title">Database Sources</div>
-        {dbLayers.length === 0 ? (
-          <div className="avail-empty">
-            Belum ada layer. Buka tab <b>Upload</b> untuk menambah SHP/GeoJSON.
-          </div>
-        ) : (
-          <ul className="layer-list">
-            {dbLayers.map((a) => (
+          ) : (
+            dbLayers.map((a) => (
               <li key={a.id}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
                   <span>{a.name}</span>
-                  {(a.layerRole === "reference" || a.periodLabel) && (
-                    <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
-                      {a.layerRole === "reference" ? "REF" : "DB"}
-                      {a.periodLabel ? ` · ${a.periodLabel}` : ""}
-                      {a.diagnosticField ? ` · ${a.diagnosticField}` : ""}
-                    </span>
-                  )}
+                  <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+                    {a.layerRole === "reference" ? "REF" : "DB"}
+                    {a.periodLabel ? ` · ${a.periodLabel}` : ""}
+                    {a.diagnosticField ? ` · ${a.diagnosticField}` : ""}
+                  </span>
                 </div>
                 <button
                   className="add-layer-btn"
@@ -143,9 +148,9 @@ export default function LayersTab({ onAddDb }: Props) {
                   {activeRefs.has(a.sourceRef) ? "ADDED" : "+ ADD"}
                 </button>
               </li>
-            ))}
-          </ul>
-        )}
+            ))
+          )}
+        </ul>
 
         {/* Raster COG Sources */}
         <div className="avail-group-title">Raster (COG)</div>
@@ -174,6 +179,23 @@ export default function LayersTab({ onAddDb }: Props) {
             ))}
           </ul>
         )}
+
+        {/* GEE Sources — paling bawah */}
+        <div className="avail-group-title">GEE Sources</div>
+        <ul className="layer-list">
+          {GEE_AVAILABLE.map((a) => (
+            <li key={a.id}>
+              <span>{a.name}</span>
+              <button
+                className="add-layer-btn"
+                disabled={activeRefs.has(a.sourceRef)}
+                onClick={() => mapStore.addAvailableLayer(a)}
+              >
+                {activeRefs.has(a.sourceRef) ? "ADDED" : "+ ADD"}
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
       )}
     </div>
@@ -191,11 +213,15 @@ function LayerItem({
   onToggleEdit: (id: string) => void;
 }) {
   const isBlock = layer.kind === "blocks";
+  const isLocked = Boolean(layer.locked);
   const isAdmin = useIsAdmin();
+  const error = useMapStore((s) => s.layerErrors[layer.id]);
+
+  const notRenderable = layer.kind === "gee";
 
   return (
     <li className="active-layer-item">
-      <div className={`active-layer${isEditing ? " selected" : ""}`}>
+      <div className={`active-layer${isEditing ? " selected" : ""}${isLocked ? " locked" : ""}`}>
         {/* Visibility checkbox */}
         <input
           type="checkbox"
@@ -216,34 +242,63 @@ function LayerItem({
           {layer.referenceConfig?.periodLabel && (
             <span className="layer-period-tag">{layer.referenceConfig.periodLabel}</span>
           )}
+          {isLocked && (
+            <span className="layer-lock-tag" title="Layer terkunci (read-only)">🔒</span>
+          )}
+          {notRenderable && (
+            <span className="layer-warn-tag" title="Layer GEE belum bisa digambar di peta (butuh pipeline tile)">
+              tak dirender
+            </span>
+          )}
+          {error && (
+            <span className="layer-error-tag" title={error}>gagal</span>
+          )}
         </div>
 
         {/* Actions — hanya admin (user = read-only) */}
         {isAdmin && (
           <span className="layer-actions">
             <button
-              className={`layer-edit${isEditing ? " on" : ""}`}
-              onClick={() => onToggleEdit(layer.id)}
-              title="Edit properti layer"
+              className="layer-zoom-btn"
+              onClick={() => zoomToLayer(layer)}
+              disabled={!canZoomToLayer(layer)}
+              title="Zoom ke layer ini"
             >
-              ✎
+              ⛶
             </button>
-            {!isBlock && (
+            <button
+              className={`layer-lock-btn${isLocked ? " on" : ""}`}
+              onClick={() => {
+                if (isEditing && !isLocked) onToggleEdit(layer.id);
+                mapStore.toggleLayerLock(layer.id);
+              }}
+              title={isLocked ? "Buka kunci layer" : "Kunci layer agar tidak diedit"}
+            >
+              {isLocked ? "🔒" : "🔓"}
+            </button>
+            {!isLocked && (
               <>
-                <button disabled={idx <= 1} onClick={() => mapStore.reorderLayer(layer.id, -1)} title="Naikkan urutan">up</button>
-                <button disabled={idx >= total - 1} onClick={() => mapStore.reorderLayer(layer.id, 1)} title="Turunkan urutan">dn</button>
-                <button className="layer-remove-btn" onClick={() => mapStore.removeLayer(layer.id)} title="Hapus layer">x</button>
+                <button
+                  className={`layer-edit${isEditing ? " on" : ""}`}
+                  onClick={() => onToggleEdit(layer.id)}
+                  title="Edit properti layer"
+                >
+                  ✎
+                </button>
+                <button disabled={idx <= 0} onClick={() => mapStore.reorderLayer(layer.id, -1)}
+                  title="Naikkan ke atas tumpukan">▲</button>
+                <button disabled={idx >= total - 1} onClick={() => mapStore.reorderLayer(layer.id, 1)}
+                  title="Turunkan di tumpukan">▼</button>
+                <button className="layer-remove-btn" onClick={() => mapStore.removeLayer(layer.id)}
+                  title={isBlock ? "Lepas layer blok dari peta" : "Hapus layer"}>✕</button>
               </>
-            )}
-            {isBlock && (
-              <span className="layer-protected" title="Block layer tidak bisa dihapus">lock</span>
             )}
           </span>
         )}
       </div>
 
-      {/* Inline layer properties panel (admin only) */}
-      {isEditing && isAdmin && (
+      {/* Inline layer properties panel (admin only, if not locked) */}
+      {isEditing && isAdmin && !isLocked && (
         <div className="layer-sym-editor">
           <LayerPropertiesPanel />
         </div>

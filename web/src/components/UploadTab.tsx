@@ -4,10 +4,11 @@ import * as XLSX from "xlsx";
 import { insertRefLayer, detectClasses } from "../analysisApi";
 import { importProjectBlocks } from "../projects";
 import { mapStore } from "../store/mapStore";
+import { RASTER_CATEGORIES, RASTER_COLORMAPS } from "../map/colormaps";
 import type { LayerClass, TableLayerConfig } from "../store/mapStore";
 
 type FC = GeoJSON.FeatureCollection;
-type Mode = "blocks" | "reference" | "table" | "raster";
+type Mode = "reference" | "table" | "raster";
 
 interface Props {
   onClose?: () => void;
@@ -17,21 +18,14 @@ interface Props {
   onRastersChanged?: () => void;
 }
 
-// Skema warna geomatico untuk raster single-band (butuh min/max).
-const RASTER_COLORMAPS = [
-  { value: "", label: "RGB / apa adanya" },
-  { value: "BrewerYlGn9", label: "Vegetasi (kuning→hijau)" },
-  { value: "BrewerYlGnBu9", label: "Drainase/air (kuning→biru)" },
-  { value: "BrewerYlOrRd9", label: "Suhu (kuning→merah)" },
-  { value: "BrewerSpectral9", label: "Spektral (umum)" },
-];
-const RASTER_CATEGORIES = ["dem", "soil", "rainfall", "twi", "ndvi", "other"];
+// Skema warna & kategori raster dibagi dengan panel properti layer
+// (web/src/map/colormaps.ts) agar tak ada dua daftar yang bisa menyimpang.
 
 // Tab Upload — 3 mode:
-//  "blocks"    : ganti layer blok utama project (AOI)
-//  "reference" : upload Reference Layer (SHP/GeoJSON) dengan konfigurasi diagnostik
+//  "reference" : upload Lapisan Referensi & AOI (SHP/GeoJSON)
 //  "table"     : import Excel/CSV sebagai Table Layer (join ke block_id)
-export default function UploadTab({ onClose, projectId, onImported, onRefLayersChanged, onRastersChanged }: Props) {
+//  "raster"    : upload Cloud-Optimized GeoTIFF (DEM, tanah, TWI, dll.)
+export default function UploadTab({ projectId, onImported, onRefLayersChanged, onRastersChanged }: Props) {
   const [mode, setMode] = useState<Mode>("reference");
   const [name, setName]   = useState("");
   const [fc, setFc]       = useState<FC | null>(null);
@@ -39,13 +33,14 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
   const [msg, setMsg]     = useState<string | null>(null);
   const [err, setErr]     = useState<string | null>(null);
 
-  // Reference layer config
+  // Reference layer & AOI config
   const [diagField, setDiagField]   = useState("");
   const [classes, setClasses]       = useState<LayerClass[]>([]);
   const [weight, setWeight]         = useState(1.0);
   const [periodLabel, setPeriodLabel] = useState("");
   const [layerGroup, setLayerGroup] = useState("");
   const [detectedFields, setDetectedFields] = useState<string[]>([]);
+  const [saveAsAOI, setSaveAsAOI]   = useState(false);
 
   // Table layer
   const [tableRows, setTableRows]     = useState<Record<string, unknown>[]>([]);
@@ -129,18 +124,7 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
     setBusy(true); setErr(null);
 
     try {
-      if (mode === "blocks") {
-        if (!projectId) { setErr("Pilih project dulu."); return; }
-        if (!fc) { setErr("Pilih file terlebih dahulu."); return; }
-        setMsg("Mengimpor batas blok...");
-        const res = await importProjectBlocks(projectId, fc);
-        if (res.ok) {
-          setMsg(`Berhasil impor ${res.imported} blok.`);
-          setFc(null); setName("");
-          onImported?.();
-        } else setErr(res.error ?? "Import gagal.");
-
-      } else if (mode === "reference") {
+      if (mode === "reference") {
         if (!name.trim()) { setErr("Isi nama layer."); return; }
         if (!fc) { setErr("Pilih file terlebih dahulu."); return; }
         setMsg("Menyimpan reference layer...");
@@ -156,9 +140,17 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
           projectId: projectId ?? undefined,
         });
         if (res.ok) {
-          setMsg(`Reference layer "${name.trim()}" tersimpan.`);
+          let extraMsg = "";
+          if (saveAsAOI && projectId) {
+            const blkRes = await importProjectBlocks(projectId, fc);
+            if (blkRes.ok) {
+              extraMsg = ` & ${blkRes.imported} blok AOI diimpor`;
+              onImported?.();
+            }
+          }
+          setMsg(`Lapisan referensi "${name.trim()}" tersimpan${extraMsg}.`);
           setFc(null); setName(""); setDiagField(""); setClasses([]);
-          setPeriodLabel(""); setLayerGroup("");
+          setPeriodLabel(""); setLayerGroup(""); setSaveAsAOI(false);
           onRefLayersChanged?.();
         } else setErr(res.error ?? "Upload gagal.");
 
@@ -180,7 +172,26 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
           setMsg(`Raster "${name.trim()}" terunggah & tercatat.`);
           setRasterFile(null); setName(""); setRasterColormap(""); setRasterMin(""); setRasterMax("");
           onRastersChanged?.();
-        } else setErr(res.error ?? "Upload raster gagal.");
+        } else {
+          // Fallback ke local preview bila Supabase DB / Storage tidak tersedia
+          const blobUrl = URL.createObjectURL(rasterFile);
+          mapStore.addRasterLayer({
+            id: `local-rast-${Date.now()}`,
+            name: name.trim(),
+            group: "raster",
+            sourceRef: `local-${Date.now()}`,
+            rasterConfig: {
+              url: blobUrl,
+              category: rasterCategory,
+              colormap: rasterColormap || undefined,
+              minValue: rasterMin !== "" ? Number(rasterMin) : undefined,
+              maxValue: rasterMax !== "" ? Number(rasterMax) : undefined,
+              opacity: 1,
+            },
+          });
+          setMsg(`Raster "${name.trim()}" dimuat ke sesi lokal.`);
+          setRasterFile(null); setName(""); setRasterColormap(""); setRasterMin(""); setRasterMax("");
+        }
 
       } else {
         // Table layer
@@ -215,8 +226,7 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
   };
 
   const modeLabels: Record<Mode, string> = {
-    blocks:    "Blok Utama (AOI)",
-    reference: "Reference Layer",
+    reference: "Lapisan Referensi & AOI",
     table:     "Table Layer (Excel/CSV)",
     raster:    "Raster (COG GeoTIFF)",
   };
@@ -225,12 +235,11 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
     <div className="upload-tab">
       <div className="upload-head">
         <h3 className="sidebar-title">Import Data</h3>
-        {onClose && <button className="upload-close" onClick={onClose} title="Kembali">x</button>}
       </div>
 
       {/* Mode selector */}
       <div className="upload-mode">
-        {(["reference", "blocks", "table", "raster"] as Mode[]).map((m) => (
+        {(["reference", "table", "raster"] as Mode[]).map((m) => (
           <label key={m} className={mode === m ? "on" : ""}>
             <input type="radio" checked={mode === m} onChange={() => { setMode(m); setMsg(null); setErr(null); }} />
             {modeLabels[m]}
@@ -240,18 +249,30 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
 
       {/* Hint */}
       <p className="upload-hint">
-        {mode === "blocks" && "Ganti batas blok produksi project. Setiap poligon jadi 1 blok AOI."}
-        {mode === "reference" && "Upload layer vektor (SHP/GeoJSON) sebagai layer referensi untuk analisis overlay."}
+        {mode === "reference" && "Upload layer vektor (SHP/GeoJSON) sebagai layer referensi dan/atau batas blok AOI."}
         {mode === "table" && "Upload Excel/CSV berisi data produksi lapangan. Di-join ke blok via block_id."}
-        {mode === "raster" && "Upload Cloud-Optimized GeoTIFF (DEM, tanah, TWI, dll.). Konversi dulu di luar browser: gdal_translate -of COG in.tif out.tif. Ditampilkan via range-request & bisa di-clip ke boundary."}
+        {mode === "raster" && "Upload Cloud-Optimized GeoTIFF (DEM, tanah, TWI, dll.). Ditampilkan via range-request & dapat di-clip ke boundary."}
       </p>
 
       {/* ── Spatial file input ─────────────────────────────────── */}
-      {(mode === "blocks" || mode === "reference") && (
-        <label className="upload-drop">
-          <input type="file" accept=".zip,.geojson,.json" onChange={handleSpatialFile} disabled={busy} />
-          <span>Pilih file (.zip Shapefile / .geojson)</span>
-        </label>
+      {mode === "reference" && (
+        <>
+          <label className="upload-drop">
+            <input type="file" accept=".zip,.geojson,.json" onChange={handleSpatialFile} disabled={busy} />
+            <span>Pilih file (.zip Shapefile / .geojson)</span>
+          </label>
+
+          {fc && (
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", margin: "8px 0", color: "var(--text-main)", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={saveAsAOI}
+                onChange={(e) => setSaveAsAOI(e.target.checked)}
+              />
+              <span>Simpan juga sebagai Batas Blok Utama (AOI Kebun)</span>
+            </label>
+          )}
+        </>
       )}
 
       {/* ── Raster (COG) file input + config ───────────────────── */}
@@ -421,12 +442,11 @@ export default function UploadTab({ onClose, projectId, onImported, onRefLayersC
       <button className="upload-submit"
         onClick={submit}
         disabled={busy
-          || ((mode === "blocks" || mode === "reference") && !fc)
+          || (mode === "reference" && !fc)
           || (mode === "table" && tableRows.length === 0)
           || (mode === "raster" && !rasterFile)}>
         {busy ? "Memproses..." :
-          mode === "blocks" ? "Import sebagai Blok AOI" :
-          mode === "reference" ? "Simpan Reference Layer" :
+          mode === "reference" ? "Simpan Lapisan Referensi & AOI" :
           mode === "raster" ? "Unggah Raster COG" :
           "Import Table Layer"}
       </button>

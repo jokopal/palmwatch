@@ -3,6 +3,11 @@ import maplibregl from "maplibre-gl";
 import { cogProtocol, setMask, clearMask } from "@geomatico/maplibre-cog-protocol";
 import type { BlockCollection } from "../types";
 import { applyBasemap, baseStyle } from "../map/basemaps";
+import { registerMainMap, canZoomToLayer, zoomToLayer } from "../map/zoomToLayer";
+import {
+  enforceLayerOrder, desiredOrderBottomUp, geometryClassOf,
+  ovSrc, ovFill, ovLine, ovCircle, ovLbl, rastSrc, rastLyr,
+} from "../map/layerIds";
 import { mapStore, type ActiveLayer, type InsetLayerKey, type RasterLayerConfig, type Symbology } from "../store/mapStore";
 import { fillColorExpr } from "../map/symbology";
 import { rampColorExpr } from "../map/ramps";
@@ -15,24 +20,56 @@ function ensureCogProtocol() {
   cogProtocolRegistered = true;
 }
 
+export const RASTER_CATEGORY_PRESETS: Record<string, { colormap: string; min: number; max: number }> = {
+  ndvi:     { colormap: "Viridis",          min: -0.2, max: 1.0 },
+  dem:      { colormap: "BrewerSpectral9",  min: 0,    max: 500 },
+  lst:      { colormap: "Magma",            min: 15,   max: 45 },
+  rainfall: { colormap: "Blues",            min: 0,    max: 500 },
+  twi:      { colormap: "Teal",             min: 0,    max: 20 },
+  soil:     { colormap: "Oranges",          min: 0,    max: 100 },
+};
+
+function isValidWgs84Bounds(b?: [number, number, number, number]): boolean {
+  if (!b || b.length !== 4) return false;
+  const [minx, miny, maxx, maxy] = b;
+  return (
+    minx >= -180 && minx <= 180 &&
+    maxx >= -180 && maxx <= 180 &&
+    miny >= -90 && miny <= 90 &&
+    maxy >= -90 && maxy <= 90 &&
+    minx < maxx && miny < maxy
+  );
+}
+
 // Bangun URL sumber untuk maplibre-cog-protocol.
 // Single-band + colormap → fragment "#color:<scheme>,<min>,<max>,c"; selain itu RGB apa adanya.
 function cogSourceUrl(cfg: RasterLayerConfig): string {
-  const base = `cog://${cfg.url}`;
-  if (cfg.colormap && cfg.minValue != null && cfg.maxValue != null) {
-    return `${base}#color:${cfg.colormap},${cfg.minValue},${cfg.maxValue},c`;
-  }
-  return base;
+  const url = cfg.url.startsWith("cog://") ? cfg.url : `cog://${cfg.url}`;
+  const cat = (cfg.category ?? "other").toLowerCase();
+  const preset = RASTER_CATEGORY_PRESETS[cat] ?? { colormap: "BrewerSpectral9", min: 0, max: 100 };
+
+  const cm = cfg.colormap || preset.colormap;
+  let min = cfg.minValue ?? preset.min;
+  let max = cfg.maxValue ?? preset.max;
+  if (max <= min) max = min + 1.0;
+
+  return `${url}#color:${cm},${min.toFixed(2)},${max.toFixed(2)},c`;
 }
+
+// Tanda tangan sumber raster: berubah -> source WAJIB dibangun ulang, karena
+// colormap & rentang nilai tertanam di dalam URL protokol cog://.
+const rasterSignature = (cfg: RasterLayerConfig) => cogSourceUrl(cfg);
 
 // MapView — render engine utama PalmWatch
 // Sumber data:
 //   - "blocks" source: BlockCollection dari API (priority_level, block_id, dll)
-//   - "overlay-<id>" source: setiap ActiveLayer selain blocks (reference, db, analysis zone)
+//   - "ov-src-<id>"  : setiap ActiveLayer vektor (reference, db, analysis zone)
+//   - "rast-src-<id>": setiap ActiveLayer raster COG
 //
-// Symb engine:
-//   fillColorExpr() untuk single & kategorized (match expression)
-//   Label dari l.symbology.labelField (opsional, toggle via labelVisible)
+// Prinsip rekonsiliasi: MapLibre adalah cerminan store, bukan tempat menyimpan
+// state. Tiap emit store, kita hitung selisih terhadap apa yang sudah terpasang
+// (dilacak lewat ref, bukan getStyle() yang mahal), terapkan yang berubah SAJA,
+// lalu tegakkan urutan tumpukan.
 
 interface Props {
   data: BlockCollection | null;
@@ -73,14 +110,6 @@ function lineWidth(id: string | null, colorBy?: InsetLayerKey): maplibregl.Expre
   return ["case", ["==", ["get", "block_id"], id ?? ""], 3, w];
 }
 
-// ── Helper: prefix source/layer ID untuk overlay ─────────────────────────────
-const ovSrc  = (id: string) => `ov-src-${id}`;
-const ovFill = (id: string) => `ov-fill-${id}`;
-const ovLine = (id: string) => `ov-line-${id}`;
-const ovLbl  = (id: string) => `ov-lbl-${id}`;
-const rastSrc = (id: string) => `rast-src-${id}`;
-const rastLyr = (id: string) => `rast-${id}`;
-
 // ── Ekspresi label untuk symbol layer ────────────────────────────────────────
 function labelLayoutExpr(sym: Symbology) {
   const field = sym.labelField?.trim();
@@ -93,6 +122,26 @@ function labelLayoutExpr(sym: Symbology) {
     "text-max-width": 8,
   };
 }
+
+// ── Bounding box helper (untuk gerbang mask raster) ──────────────────────────
+type BBox = [number, number, number, number];
+
+function bboxOfCollection(fc: GeoJSON.FeatureCollection): BBox | null {
+  const b = new maplibregl.LngLatBounds();
+  for (const f of fc.features) {
+    const g = f.geometry;
+    if (!g) continue;
+    if (g.type === "Polygon") {
+      for (const ring of g.coordinates) for (const c of ring) b.extend([c[0], c[1]]);
+    } else if (g.type === "MultiPolygon") {
+      for (const poly of g.coordinates) for (const ring of poly) for (const c of ring) b.extend([c[0], c[1]]);
+    }
+  }
+  return b.isEmpty() ? null : [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+}
+
+const bboxIntersects = (a: BBox, b: BBox) =>
+  a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 
 export default function MapView({
   data,
@@ -115,75 +164,110 @@ export default function MapView({
   onSelectRef.current = onSelect;
   colorByRef.current  = colorBy;
 
+  // Apa yang SUDAH terpasang di MapLibre — dilacak di sini agar rekonsiliasi
+  // tidak perlu memanggil map.getStyle() (menserialisasi seluruh style) tiap emit.
+  const overlayIdsRef = useRef<Set<string>>(new Set());
+  const rasterSigRef  = useRef<Map<string, string>>(new Map());
+  const dataSigRef    = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
+  const orderSigRef   = useRef<string>("");
+  const clickBoundRef = useRef(false);
+
   // ── syncOverlayLayers ──────────────────────────────────────────────────────
-  // Rekonsiliasi semua non-block layer (reference/db/analysis zone) ke MapLibre.
-  // Dipanggil tiap kali store berubah.
   function syncOverlayLayers() {
     const map = mapRef.current;
     if (!map || !loadedRef.current || colorByRef.current) return;
 
     const overlayLayers = mapStore.getState().activeLayers.filter(
-      (l) => l.kind !== "blocks" && l.kind !== "gee" && l.data,
+      (l) => l.kind !== "blocks" && l.kind !== "raster" && l.kind !== "gee" && l.data,
     );
     const wantedIds = new Set(overlayLayers.map((l) => l.id));
 
     // Hapus layer yang tidak lagi ada di store
-    for (const srcId of Object.keys((map.getStyle() as { sources?: Record<string, unknown> }).sources ?? {})) {
-      if (!srcId.startsWith("ov-src-")) continue;
-      const lid = srcId.slice("ov-src-".length);
-      if (!wantedIds.has(lid)) {
-        for (const fn of [ovLbl, ovLine, ovFill]) {
-          if (map.getLayer(fn(lid))) map.removeLayer(fn(lid));
-        }
-        if (map.getSource(srcId)) map.removeSource(srcId);
+    for (const lid of [...overlayIdsRef.current]) {
+      if (wantedIds.has(lid)) continue;
+      for (const fn of [ovLbl, ovCircle, ovLine, ovFill]) {
+        if (map.getLayer(fn(lid))) map.removeLayer(fn(lid));
       }
+      if (map.getSource(ovSrc(lid))) map.removeSource(ovSrc(lid));
+      overlayIdsRef.current.delete(lid);
+      dataSigRef.current.delete(lid);
+      mapStore.setLayerError(lid, null);
     }
 
-    // Tambah / update overlay layers
     for (const l of overlayLayers) {
       const srcId = ovSrc(l.id);
       const s = l.symbology;
       const vis = l.visible ? "visible" : "none";
       const fillExpr = fillColorExpr(s);
+      // Jenis layer HARUS cocok dengan geometri: fill tidak menggambar Point,
+      // dan line tidak menggambar Polygon secara terisi.
+      const geom = geometryClassOf(l.data);
 
       if (!map.getSource(srcId)) {
-        // Tambah source baru
         map.addSource(srcId, { type: "geojson", data: l.data as GeoJSON.FeatureCollection });
+        overlayIdsRef.current.add(l.id);
+        dataSigRef.current.set(l.id, l.data as GeoJSON.FeatureCollection);
 
-        // Fill layer
-        map.addLayer({
-          id: ovFill(l.id),
-          type: "fill",
-          source: srcId,
-          paint: {
-            "fill-color": fillExpr as maplibregl.ColorSpecification,
-            "fill-opacity": s.fillOpacity,
-          },
-          layout: { visibility: vis },
-        });
+        if (geom === "point") {
+          map.addLayer({
+            id: ovCircle(l.id),
+            type: "circle",
+            source: srcId,
+            paint: {
+              "circle-color": fillExpr as maplibregl.ColorSpecification,
+              "circle-opacity": s.fillOpacity,
+              // Radius mengikuti zoom supaya belasan ribu titik tetap terbaca
+              // saat di-zoom-out dan tidak menyatu jadi bidang penuh.
+              "circle-radius": [
+                "interpolate", ["linear"], ["zoom"],
+                10, 1.2, 14, 2.5, 17, 5, 20, 9,
+              ] as never,
+              "circle-stroke-color": s.stroke,
+              "circle-stroke-width": Math.min(s.strokeWidth, 1),
+            },
+            layout: { visibility: vis },
+          });
+        } else if (geom === "line") {
+          map.addLayer({
+            id: ovLine(l.id),
+            type: "line",
+            source: srcId,
+            paint: {
+              // Untuk layer garis, warna kategori diterapkan ke garisnya sendiri
+              // (bukan ke `stroke` yang di poligon berperan sebagai batas).
+              "line-color": fillExpr as maplibregl.ColorSpecification,
+              "line-opacity": s.fillOpacity,
+              "line-width": Math.max(s.strokeWidth, 1),
+            },
+            layout: { visibility: vis },
+          });
+        } else {
+          map.addLayer({
+            id: ovFill(l.id),
+            type: "fill",
+            source: srcId,
+            paint: {
+              "fill-color": fillExpr as maplibregl.ColorSpecification,
+              "fill-opacity": s.fillOpacity,
+            },
+            layout: { visibility: vis },
+          });
 
-        // Stroke layer
-        map.addLayer({
-          id: ovLine(l.id),
-          type: "line",
-          source: srcId,
-          paint: {
-            "line-color": s.stroke,
-            "line-width": s.strokeWidth,
-          },
-          layout: { visibility: vis },
-        });
+          map.addLayer({
+            id: ovLine(l.id),
+            type: "line",
+            source: srcId,
+            paint: { "line-color": s.stroke, "line-width": s.strokeWidth },
+            layout: { visibility: vis },
+          });
+        }
 
-        // Label layer (opsional)
         if (s.labelVisible && s.labelField) {
           map.addLayer({
             id: ovLbl(l.id),
             type: "symbol",
             source: srcId,
-            layout: {
-              ...labelLayoutExpr(s),
-              visibility: vis,
-            } as never,
+            layout: { ...labelLayoutExpr(s), visibility: vis } as never,
             paint: {
               "text-color": s.labelColor ?? "#ffffff",
               "text-halo-color": "rgba(0,0,0,0.5)",
@@ -193,22 +277,36 @@ export default function MapView({
         }
 
       } else {
-        // Update source data jika berubah
-        (map.getSource(srcId) as maplibregl.GeoJSONSource).setData(l.data as GeoJSON.FeatureCollection);
+        // setData() hanya bila GeoJSON-nya memang berganti. Dulu ini dipanggil
+        // pada SETIAP emit store, sehingga menggeser slider opacity ikut
+        // mem-parse ulang seluruh FeatureCollection (berat + berkedip).
+        if (dataSigRef.current.get(l.id) !== l.data) {
+          (map.getSource(srcId) as maplibregl.GeoJSONSource).setData(l.data as GeoJSON.FeatureCollection);
+          dataSigRef.current.set(l.id, l.data as GeoJSON.FeatureCollection);
+        }
 
-        // Update paint properties
+        if (map.getLayer(ovCircle(l.id))) {
+          map.setPaintProperty(ovCircle(l.id), "circle-color", fillExpr as never);
+          map.setPaintProperty(ovCircle(l.id), "circle-opacity", s.fillOpacity);
+          map.setPaintProperty(ovCircle(l.id), "circle-stroke-color", s.stroke);
+          map.setPaintProperty(ovCircle(l.id), "circle-stroke-width", Math.min(s.strokeWidth, 1));
+          map.setLayoutProperty(ovCircle(l.id), "visibility", vis);
+        }
         if (map.getLayer(ovFill(l.id))) {
           map.setPaintProperty(ovFill(l.id), "fill-color", fillExpr as never);
           map.setPaintProperty(ovFill(l.id), "fill-opacity", s.fillOpacity);
           map.setLayoutProperty(ovFill(l.id), "visibility", vis);
         }
         if (map.getLayer(ovLine(l.id))) {
-          map.setPaintProperty(ovLine(l.id), "line-color", s.stroke);
-          map.setPaintProperty(ovLine(l.id), "line-width", s.strokeWidth);
+          // Layer garis murni memakai warna kategori; batas poligon memakai stroke.
+          const lineColorValue = geom === "line" ? (fillExpr as never) : (s.stroke as never);
+          map.setPaintProperty(ovLine(l.id), "line-color", lineColorValue);
+          map.setPaintProperty(ovLine(l.id), "line-width",
+            geom === "line" ? Math.max(s.strokeWidth, 1) : s.strokeWidth);
+          if (geom === "line") map.setPaintProperty(ovLine(l.id), "line-opacity", s.fillOpacity);
           map.setLayoutProperty(ovLine(l.id), "visibility", vis);
         }
 
-        // Label: tambah jika baru aktif, hapus jika dimatikan
         if (s.labelVisible && s.labelField) {
           if (!map.getLayer(ovLbl(l.id))) {
             map.addLayer({
@@ -236,8 +334,6 @@ export default function MapView({
   }
 
   // ── syncRasterLayers ────────────────────────────────────────────────────────
-  // Rekonsiliasi semua raster COG (kind === "raster") ke MapLibre. Ditaruh DI BAWAH
-  // blok/overlay vektor (beforeId) agar poligon tetap terlihat di atas raster.
   function syncRasterLayers() {
     const map = mapRef.current;
     if (!map || !loadedRef.current || colorByRef.current) return;
@@ -245,55 +341,84 @@ export default function MapView({
     const rasterLayers = mapStore.getState().activeLayers.filter(
       (l) => l.kind === "raster" && l.rasterConfig,
     );
-    const wantedIds = new Set(rasterLayers.map((l) => l.id));
+    const wanted = new Map(rasterLayers.map((l) => [l.id, l] as const));
 
-    // Hapus raster yang tidak lagi ada di store
-    for (const srcId of Object.keys((map.getStyle() as { sources?: Record<string, unknown> }).sources ?? {})) {
-      if (!srcId.startsWith("rast-src-")) continue;
-      const lid = srcId.slice("rast-src-".length);
-      if (!wantedIds.has(lid)) {
-        if (map.getLayer(rastLyr(lid))) map.removeLayer(rastLyr(lid));
-        if (map.getSource(srcId)) map.removeSource(srcId);
-      }
+    // Buang raster yang hilang dari store ATAU yang tanda tangan sumbernya
+    // berubah (colormap / rentang nilai baru → URL cog:// baru).
+    for (const [lid, sig] of [...rasterSigRef.current]) {
+      const still = wanted.get(lid);
+      const nextSig = still?.rasterConfig ? rasterSignature(still.rasterConfig) : null;
+      if (nextSig === sig) continue;
+      if (map.getLayer(rastLyr(lid))) map.removeLayer(rastLyr(lid));
+      if (map.getSource(rastSrc(lid))) map.removeSource(rastSrc(lid));
+      rasterSigRef.current.delete(lid);
+      mapStore.setLayerError(lid, null);
     }
-
-    // Raster harus di bawah blok vektor: sisipkan sebelum layer blok terbawah.
-    const beforeId = map.getLayer("blocks-fill") ? "blocks-fill" : undefined;
 
     for (const l of rasterLayers) {
       const cfg = l.rasterConfig!;
       const srcId = rastSrc(l.id);
       const vis = l.visible ? "visible" : "none";
+
       if (!map.getSource(srcId)) {
-        map.addSource(srcId, { type: "raster", url: cogSourceUrl(cfg), tileSize: 256 });
+        const validBounds = isValidWgs84Bounds(cfg.bounds) ? cfg.bounds : undefined;
+        map.addSource(srcId, {
+          type: "raster",
+          url: cogSourceUrl(cfg),
+          tileSize: 256,
+          ...(validBounds ? { bounds: validBounds } : {}),
+          maxzoom: 22,
+        });
         map.addLayer({
           id: rastLyr(l.id),
           type: "raster",
           source: srcId,
           paint: { "raster-opacity": cfg.opacity },
           layout: { visibility: vis },
-        }, beforeId);
-      } else {
-        if (map.getLayer(rastLyr(l.id))) {
-          map.setPaintProperty(rastLyr(l.id), "raster-opacity", cfg.opacity);
-          map.setLayoutProperty(rastLyr(l.id), "visibility", vis);
-        }
+        });
+        rasterSigRef.current.set(l.id, rasterSignature(cfg));
+      } else if (map.getLayer(rastLyr(l.id))) {
+        map.setPaintProperty(rastLyr(l.id), "raster-opacity", cfg.opacity);
+        map.setLayoutProperty(rastLyr(l.id), "visibility", vis);
       }
     }
     applyRasterMask();
   }
 
   // ── applyRasterMask ─────────────────────────────────────────────────────────
-  // Clip SEMUA raster COG ke batas blok (setMask global lib). Hanya peta utama
-  // (bukan inset). Meringankan render & memfokuskan tampilan ke AOI.
+  // Clip SEMUA raster COG ke batas blok (setMask bersifat global di library).
+  //
+  // GERBANG PENTING: bila ada raster yang bbox-nya tidak bersinggungan dengan
+  // batas blok, masking akan menghapusnya dari layar sepenuhnya tanpa penjelasan
+  // apa pun — penyebab klasik "raster sudah diunggah tapi tidak terlihat".
+  // Dalam kasus itu masking dilewati dan alasannya dilaporkan ke panel layer.
   function applyRasterMask() {
     const map = mapRef.current;
     if (!map || !loadedRef.current || colorByRef.current) return;
+
     const clip = mapStore.getState().clipRasterToBoundary;
     const fc = dataRef.current;
-    const hasRaster = mapStore.getState().activeLayers.some((l) => l.kind === "raster");
-    if (clip && hasRaster && fc && fc.features.length > 0) {
-      setMask(fc as GeoJSON.FeatureCollection);
+    const rasters = mapStore.getState().activeLayers.filter((l) => l.kind === "raster");
+    const hasBlocksLyr = Boolean(blocksLayer());
+    const blocksBbox = fc && fc.features.length > 0 && hasBlocksLyr
+      ? bboxOfCollection(fc as unknown as GeoJSON.FeatureCollection)
+      : null;
+
+    let outside = false;
+    for (const l of rasters) {
+      const b = l.rasterConfig?.bounds;
+      const disjoint = Boolean(clip && blocksBbox && b && !bboxIntersects(b as BBox, blocksBbox));
+      if (disjoint) outside = true;
+      mapStore.setLayerError(
+        l.id,
+        disjoint
+          ? "Raster berada di luar batas blok — clip dimatikan sementara agar tetap terlihat."
+          : null,
+      );
+    }
+
+    if (clip && !outside && blocksBbox && hasBlocksLyr && rasters.length > 0) {
+      setMask(fc as unknown as GeoJSON.FeatureCollection);
     } else {
       clearMask();
     }
@@ -305,14 +430,31 @@ export default function MapView({
   function rebuildRasterSources() {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
-    for (const srcId of Object.keys((map.getStyle() as { sources?: Record<string, unknown> }).sources ?? {})) {
-      if (!srcId.startsWith("rast-src-")) continue;
-      const lid = "rast-" + srcId.slice("rast-src-".length);
-      if (map.getLayer(lid)) map.removeLayer(lid);
-      if (map.getSource(srcId)) map.removeSource(srcId);
+    for (const lid of [...rasterSigRef.current.keys()]) {
+      if (map.getLayer(rastLyr(lid))) map.removeLayer(rastLyr(lid));
+      if (map.getSource(rastSrc(lid))) map.removeSource(rastSrc(lid));
+      rasterSigRef.current.delete(lid);
     }
     applyRasterMask();
     syncRasterLayers();
+    syncOrder(true);
+  }
+
+  // ── Penegakan urutan tumpukan ───────────────────────────────────────────────
+  function syncOrder(force = false) {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || colorByRef.current) return;
+    const sig = desiredOrderBottomUp().join("|");
+    if (!force && sig === orderSigRef.current) return;
+    orderSigRef.current = sig;
+    enforceLayerOrder(map);
+  }
+
+  /** Satu siklus rekonsiliasi penuh: raster → vektor → urutan. */
+  function syncAll() {
+    syncRasterLayers();
+    syncOverlayLayers();
+    syncOrder();
   }
 
   // ── Mode 3D ─────────────────────────────────────────────────────────────────
@@ -351,6 +493,7 @@ export default function MapView({
       if (map.getLayer("blocks-fill")) map.setLayoutProperty("blocks-fill", "visibility", blocksVisible() ? "visible" : "none");
       if (map.getPitch() > 5) map.easeTo({ pitch: 0, duration: 700 });
     }
+    syncOrder(true);
   }
 
   // ── Render block layer ───────────────────────────────────────────────────────
@@ -358,6 +501,8 @@ export default function MapView({
     const map = mapRef.current;
     const fc = dataRef.current;
     if (!map || !loadedRef.current || !fc) return;
+    // Blok hanya dirender bila layer "blocks" aktif di panel (tidak ada di startup).
+    if (!blocksLayer()) return;
     const cb = colorByRef.current;
 
     const src = map.getSource("blocks") as maplibregl.GeoJSONSource | undefined;
@@ -403,12 +548,18 @@ export default function MapView({
         },
       });
 
-      map.on("click", "blocks-fill", (e) => {
-        const f = e.features?.[0];
-        if (f && onSelectRef.current) onSelectRef.current(f.properties!.block_id as string);
-      });
-      map.on("mouseenter", "blocks-fill", () => (map.getCanvas().style.cursor = "pointer"));
-      map.on("mouseleave", "blocks-fill", () => (map.getCanvas().style.cursor = ""));
+      // Didaftarkan SEKALI seumur peta. Layer blok kini bisa dimatikan &
+      // dihidupkan berulang kali dari panel; mendaftar ulang tiap kali akan
+      // menumpuk handler dan memicu onSelect berkali-kali untuk satu klik.
+      if (!clickBoundRef.current) {
+        clickBoundRef.current = true;
+        map.on("click", "blocks-fill", (e) => {
+          const f = e.features?.[0];
+          if (f && onSelectRef.current) onSelectRef.current(f.properties!.block_id as string);
+        });
+        map.on("mouseenter", "blocks-fill", () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", "blocks-fill", () => (map.getCanvas().style.cursor = ""));
+      }
     }
 
     const b = new maplibregl.LngLatBounds();
@@ -419,8 +570,7 @@ export default function MapView({
     }
     if (!b.isEmpty() && interactive) map.fitBounds(b, { padding: 60, duration: 0 });
     apply3D();
-    syncRasterLayers(); // raster di bawah blok
-    syncOverlayLayers(); // pasang overlay yang sudah dimuat sebelum data masuk
+    syncAll();
   }
 
   // ── Init map (sekali) ────────────────────────────────────────────────────────
@@ -430,25 +580,55 @@ export default function MapView({
     const map = new maplibregl.Map({
       container: ref.current,
       style: baseStyle(mapStore.getState().basemap),
-      center: [117.15, -0.535],
+      center: [111.705, -2.560],
       zoom: 11,
       interactive,
       attributionControl: false,
     });
+    // Daftarkan sebagai peta utama agar tombol "zoom ke layer" & auto-zoom startup bekerja.
+    if (interactive) registerMainMap(map);
     if (interactive) map.addControl(new maplibregl.NavigationControl({}), "top-left");
+
+    // Kegagalan source (COG rusak, 404, CORS) dulu hanya muncul di console —
+    // di layar layernya sekadar "tidak terlihat". Kini dilaporkan ke panel.
+    if (interactive) {
+      map.on("error", (e) => {
+        const sourceId = (e as unknown as { sourceId?: string }).sourceId;
+        if (!sourceId) return;
+        const lid = sourceId.startsWith("rast-src-") ? sourceId.slice("rast-src-".length)
+          : sourceId.startsWith("ov-src-") ? sourceId.slice("ov-src-".length)
+          : null;
+        if (!lid) return;
+        const msg = (e as unknown as { error?: { message?: string } }).error?.message
+          ?? "Gagal memuat sumber layer.";
+        mapStore.setLayerError(lid, msg);
+      });
+    }
+
     map.on("load", () => {
       loadedRef.current = true;
       if (onMapLoad) onMapLoad(map);
       if (import.meta.env.DEV && interactive) (window as unknown as { __map?: maplibregl.Map }).__map = map;
       renderBlocks();
-      syncRasterLayers();
-      syncOverlayLayers();
+      syncAll();
+
+      const active = mapStore.getState().activeLayers;
+      const targetLyr = active.find((l) => l.kind === "reference") || active.find((l) => l.kind === "blocks");
+      if (targetLyr && canZoomToLayer(targetLyr)) {
+        zoomToLayer(targetLyr);
+      }
     });
     mapRef.current = map;
     return () => {
+      if (interactive) registerMainMap(null);
       map.remove();
       mapRef.current = null;
       loadedRef.current = false;
+      overlayIdsRef.current.clear();
+      rasterSigRef.current.clear();
+      dataSigRef.current.clear();
+      clickBoundRef.current = false;
+      orderSigRef.current = "";
     };
   }, [interactive]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -462,13 +642,27 @@ export default function MapView({
   }, []);
 
   // ── Data blok berubah ────────────────────────────────────────────────────────
-  useEffect(() => { renderBlocks(); }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    renderBlocks();
+    // Batas blok berubah -> gerbang mask raster perlu dinilai ulang.
+    applyRasterMask();
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Store subscription (basemap + simbologi blok + overlay layers + 3D) ─────
   useEffect(() => {
     let curBasemap = mapStore.getState().basemap;
     let cur3D = mapStore.getState().threeD;
     let curClip = mapStore.getState().clipRasterToBoundary;
+    let curHasBlocks = mapStore.getState().activeLayers.some((l) => l.kind === "blocks");
+
+    const removeAllBlocks = () => {
+      const map = mapRef.current;
+      if (!map) return;
+      for (const lid of ["blocks-3d", "blocks-label", "blocks-fill", "blocks-line"]) {
+        if (map.getLayer(lid)) map.removeLayer(lid);
+      }
+      if (map.getSource("blocks")) map.removeSource("blocks");
+    };
 
     const applyBlocksSymbology = () => {
       const map = mapRef.current;
@@ -507,14 +701,23 @@ export default function MapView({
       const next = mapStore.getState().basemap;
       if (next !== curBasemap) {
         curBasemap = next;
-        if (map && loadedRef.current) applyBasemap(map, next);
+        if (map && loadedRef.current) {
+          applyBasemap(map, next);
+          // Basemap disisipkan ulang di dasar style -> urutan wajib ditegakkan lagi.
+          syncOrder(true);
+        }
       }
       // Blocks symbology
       applyBlocksSymbology();
-      // Raster COG layers
-      syncRasterLayers();
-      // Overlay layers (reference/db/analysis)
-      syncOverlayLayers();
+      // Block layer aktif/dinonaktifkan
+      const hasBlocks = mapStore.getState().activeLayers.some((l) => l.kind === "blocks");
+      if (hasBlocks !== curHasBlocks) {
+        curHasBlocks = hasBlocks;
+        if (hasBlocks) renderBlocks();
+        else removeAllBlocks();
+      }
+      // Raster + vektor + urutan
+      syncAll();
       // 3D toggle
       const n3d = mapStore.getState().threeD;
       if (n3d !== cur3D) { cur3D = n3d; apply3D(); }

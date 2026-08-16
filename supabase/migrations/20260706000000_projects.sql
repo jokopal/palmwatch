@@ -28,7 +28,7 @@ create index if not exists idx_vlayers_project on public.vector_layers(project_i
 -- ── Project default untuk data yang sudah ada ───────────────────────────────
 insert into public.projects (id, name, description, estate, is_public)
 values ('00000000-0000-0000-0000-000000000001',
-        'Kalimantan Timur — Demo', 'Blok demo awal (seed)', 'Kalimantan Timur Estate A', true)
+        'Kebun 77 - Kotawaringin', 'Project utama kebun dan analisis AOI', 'Kebun 77 - Kotawaringin', true)
 on conflict (id) do nothing;
 update public.blocks set project_id = '00000000-0000-0000-0000-000000000001' where project_id is null;
 

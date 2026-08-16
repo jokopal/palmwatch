@@ -29,7 +29,7 @@ export default function FloatingLegend() {
                 <div className="map-legend-raster-bar" style={{ background: swatch }} />
                 {rc?.minValue != null && rc?.maxValue != null && (
                   <div className="map-legend-raster-scale">
-                    <span>{rc.minValue}</span><span>{rc.maxValue}</span>
+                    <span>{Number(rc.minValue).toFixed(2)}</span><span>{Number(rc.maxValue).toFixed(2)}</span>
                   </div>
                 )}
               </div>

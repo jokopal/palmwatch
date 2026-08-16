@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { DEFAULT_BASEMAP, type BasemapId } from "../map/basemaps";
 import { PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
+import { zoomToLayer } from "../map/zoomToLayer";
 
 // ── Store peta global (tanpa dependency eksternal) ───────────────────────────
 // Sumber kebenaran tunggal untuk basemap, inset, layer aktif, simbologi,
@@ -119,12 +120,23 @@ export interface AnalysisResult {
   saved: boolean;
 }
 
+// ── Urutan tumpukan (z-order) ────────────────────────────────────────────────
+// KONVENSI: `activeLayers[0]` = paling ATAS (seperti daftar layer QGIS), layer
+// yang baru ditambahkan masuk di indeks 0. MapView menegakkan urutan ini ke
+// MapLibre lewat moveLayer() — sebelumnya urutan peta = urutan penambahan
+// sehingga tombol naik/turun tidak berefek apa pun.
+//
+// Raster COG SELALU digambar di bawah seluruh layer vektor, apa pun posisinya
+// di daftar. Alasannya praktis: satu DEM full-extent akan menutupi seluruh
+// poligon dan membuat pengguna mengira layer vektornya hilang.
+
 // ── Active Layer ──────────────────────────────────────────────────────────────
 export interface ActiveLayer {
   id: string;
   name: string;
   kind: LayerKind;
   visible: boolean;
+  locked?: boolean;
   symbology: Symbology;
   sourceRef?: string;
   data?: GeoJSON.FeatureCollection;
@@ -166,6 +178,12 @@ export interface MapState {
   temporalGroupId: string | null;  // layer_group dipilih untuk temporal
   rasterLayers: AvailableLayer[];  // katalog raster COG dari DB (group === "raster")
   clipRasterToBoundary: boolean;   // clip semua raster COG ke batas blok (performa + fokus AOI)
+  /**
+   * Kegagalan render per layer (id layer -> pesan). Diisi MapView saat MapLibre
+   * melaporkan error pada source milik kita (COG rusak, 404, CORS, di luar AOI).
+   * Tanpa ini, layer yang gagal hanya "tidak terlihat" tanpa penjelasan apa pun.
+   */
+  layerErrors: Record<string, string>;
 }
 
 const MAX_INSETS = 3;
@@ -191,14 +209,19 @@ function defaultBlocksSymbology(): Symbology {
   };
 }
 
-function defaultReferenceSymbology(classes: LayerClass[]): Symbology {
-  if (classes.length > 0) {
+// PENTING: `categoryField` WAJIB diisi bila mode "categorized".
+// fillColorExpr() jatuh ke warna tunggal bila categoryField kosong — dulu itu
+// membuat SEMUA reference layer tampil hijau polos meski kelasnya sudah
+// dikonfigurasi, dan editor kategori tersembunyi di panel properti.
+function defaultReferenceSymbology(classes: LayerClass[], diagnosticField?: string): Symbology {
+  if (classes.length > 0 && diagnosticField) {
     return {
       mode: "categorized",
       fill: "#5FA83F",
       fillOpacity: 0.55,
       stroke: "#1D4E2C",
       strokeWidth: 0.8,
+      categoryField: diagnosticField,
       categories: classes.map((c) => ({ value: c.value, color: c.color, label: c.label })),
       labelVisible: false,
       labelFontSize: 9,
@@ -206,6 +229,21 @@ function defaultReferenceSymbology(classes: LayerClass[]): Symbology {
     };
   }
   return defaultGeeSymbology("#5FA83F");
+}
+
+/** Turunkan kategori simbologi dari kelas diagnostik reference layer. */
+function symbologyFromClasses(
+  base: Symbology,
+  classes: LayerClass[],
+  diagnosticField?: string,
+): Symbology {
+  if (classes.length === 0 || !diagnosticField) return base;
+  return {
+    ...base,
+    mode: "categorized",
+    categoryField: diagnosticField,
+    categories: classes.map((c) => ({ value: c.value, color: c.color, label: c.label })),
+  };
 }
 
 function defaultGeeSymbology(color: string): Symbology {
@@ -270,16 +308,10 @@ let state: MapState = {
     { id: "inset-1", layer: "ndvi" },
     { id: "inset-2", layer: "rain" },
   ],
-  activeLayers: [
-    {
-      id: "layer-blocks",
-      name: "Harvest Blocks",
-      kind: "blocks",
-      visible: true,
-      symbology: defaultBlocksSymbology(),
-    },
-  ],
-  selectedLayerId: "layer-blocks",
+  // Tidak ada default layer. Startup zoom ke reference layer terbaru
+  // ditangani di LeftPanel (auto-add) — blok hanya dirender bila diaktifkan.
+  activeLayers: [],
+  selectedLayerId: null,
   dbLayers: [],
   leftTab: "layers",
   threeD: false,
@@ -288,7 +320,8 @@ let state: MapState = {
   analysisRunning: false,
   temporalGroupId: null,
   rasterLayers: [],
-  clipRasterToBoundary: true,
+  clipRasterToBoundary: false,
+  layerErrors: {},
 };
 
 const listeners = new Set<() => void>();
@@ -322,10 +355,12 @@ export const mapStore = {
   toggleLayerVisible: (id: string) =>
     set({ activeLayers: state.activeLayers.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)) }),
 
+  toggleLayerLock: (id: string) =>
+    set({ activeLayers: state.activeLayers.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l)) }),
+
   removeLayer: (id: string) => {
-    // Block layer tidak bisa dihapus
-    const layer = state.activeLayers.find((l) => l.id === id);
-    if (layer?.kind === "blocks") return;
+    const target = state.activeLayers.find((l) => l.id === id);
+    if (target?.locked) return;
     set({
       activeLayers: state.activeLayers.filter((l) => l.id !== id),
       selectedLayerId: state.selectedLayerId === id ? null : state.selectedLayerId,
@@ -350,13 +385,15 @@ export const mapStore = {
 
     set({
       activeLayers: [
-        ...state.activeLayers,
         {
           id, name: a.name, kind, visible: true,
-          symbology: isRef ? defaultReferenceSymbology(classes) : defaultGeeSymbology(color),
+          symbology: isRef
+            ? defaultReferenceSymbology(classes, a.diagnosticField)
+            : defaultGeeSymbology(color),
           sourceRef: a.sourceRef,
           referenceConfig: refConfig,
         },
+        ...state.activeLayers,
       ],
       selectedLayerId: id,
     });
@@ -370,10 +407,11 @@ export const mapStore = {
     const classes = a.layerConfig?.classes ?? [];
     set({
       activeLayers: [
-        ...state.activeLayers,
         {
           id, name: a.name, kind, visible: true, sourceRef: a.sourceRef,
-          symbology: isRef ? defaultReferenceSymbology(classes) : defaultGeeSymbology("#5FA83F"),
+          symbology: isRef
+            ? defaultReferenceSymbology(classes, a.diagnosticField)
+            : defaultGeeSymbology("#5FA83F"),
           data: geojson,
           referenceConfig: isRef ? {
             diagnosticField: a.diagnosticField ?? "",
@@ -384,8 +422,27 @@ export const mapStore = {
             dbLayerId: a.sourceRef,
           } : undefined,
         },
+        ...state.activeLayers,
       ],
       selectedLayerId: id,
+    });
+  },
+
+  // Tambah kembali layer blok (AOI) — tidak ada di startup, opsional via panel.
+  addBlocksLayer: () => {
+    if (state.activeLayers.some((l) => l.kind === "blocks")) return;
+    set({
+      activeLayers: [
+        {
+          id: "layer-blocks",
+          name: "Harvest Blocks",
+          kind: "blocks",
+          visible: true,
+          symbology: defaultBlocksSymbology(),
+        },
+        ...state.activeLayers,
+      ],
+      selectedLayerId: "layer-blocks",
     });
   },
 
@@ -397,17 +454,16 @@ export const mapStore = {
     if (!a.rasterConfig) return;
     if (state.activeLayers.some((l) => l.kind === "raster" && l.sourceRef === a.sourceRef)) return;
     const id = `layer-${a.id}-${Date.now()}`;
+    const newLayer: ActiveLayer = {
+      id, name: a.name, kind: "raster", visible: true, sourceRef: a.sourceRef,
+      symbology: defaultRasterSymbology(),
+      rasterConfig: a.rasterConfig,
+    };
     set({
-      activeLayers: [
-        ...state.activeLayers,
-        {
-          id, name: a.name, kind: "raster", visible: true, sourceRef: a.sourceRef,
-          symbology: defaultRasterSymbology(),
-          rasterConfig: a.rasterConfig,
-        },
-      ],
+      activeLayers: [newLayer, ...state.activeLayers],
       selectedLayerId: id,
     });
+    zoomToLayer(newLayer);
   },
 
   updateRasterOpacity: (id: string, opacity: number) =>
@@ -419,6 +475,36 @@ export const mapStore = {
       ),
     }),
 
+  /**
+   * Ubah konfigurasi raster (colormap / rentang nilai / opacity / bounds).
+   * MapView membangun ulang source bila colormap atau rentang berubah, karena
+   * nilai itu tertanam di fragment URL protokol `cog://`.
+   */
+  updateRasterConfig: (id: string, patch: Partial<RasterLayerConfig>) =>
+    set({
+      activeLayers: state.activeLayers.map((l) =>
+        l.id === id && l.rasterConfig && !l.locked
+          ? { ...l, rasterConfig: { ...l.rasterConfig, ...patch } }
+          : l,
+      ),
+    }),
+
+  // Kegagalan render per layer (diisi MapView dari event error MapLibre).
+  //
+  // WAJIB idempoten: fungsi ini dipanggil dari applyRasterMask() yang berjalan
+  // pada SETIAP emit store. Bila set() dipanggil tanpa syarat, tiap panggilan
+  // memicu emit -> subscriber MapView -> applyRasterMask -> set() lagi = loop
+  // tak berujung yang membekukan aplikasi begitu ada raster aktif.
+  setLayerError: (id: string, message: string | null) => {
+    const current = state.layerErrors[id] ?? null;
+    const next = message ?? null;
+    if (current === next) return;
+    const layerErrors = { ...state.layerErrors };
+    if (next) layerErrors[id] = next;
+    else delete layerErrors[id];
+    set({ layerErrors });
+  },
+
   setClipRasterToBoundary: (clipRasterToBoundary: boolean) => set({ clipRasterToBoundary }),
 
   // Tambah layer hasil analisis (zona)
@@ -426,12 +512,12 @@ export const mapStore = {
     const id = `layer-analysis-${Date.now()}`;
     set({
       activeLayers: [
-        ...state.activeLayers,
         {
           id, name: "Zona Analisis", kind: "db", visible: true,
           symbology: defaultAnalysisZoneSymbology(),
           data: result.zonesGeojson,
         },
+        ...state.activeLayers,
       ],
       selectedLayerId: id,
     });
@@ -440,24 +526,32 @@ export const mapStore = {
   updateSymbology: (id: string, patch: Partial<Symbology>) =>
     set({
       activeLayers: state.activeLayers.map((l) =>
-        l.id === id ? { ...l, symbology: { ...l.symbology, ...patch } } : l,
+        l.id === id && !l.locked ? { ...l, symbology: { ...l.symbology, ...patch } } : l,
       ),
     }),
 
   updateReferenceConfig: (id: string, patch: Partial<ReferenceLayerConfig>) =>
     set({
-      activeLayers: state.activeLayers.map((l) =>
-        l.id === id && l.referenceConfig
-          ? { ...l, referenceConfig: { ...l.referenceConfig, ...patch } }
-          : l,
-      ),
+      activeLayers: state.activeLayers.map((l) => {
+        if (l.id !== id || !l.referenceConfig || l.locked) return l;
+        const referenceConfig = { ...l.referenceConfig, ...patch };
+        return {
+          ...l,
+          referenceConfig,
+          symbology: symbologyFromClasses(
+            l.symbology,
+            referenceConfig.classes,
+            referenceConfig.diagnosticField,
+          ),
+        };
+      }),
     }),
 
   reorderLayer: (id: string, dir: -1 | 1) => {
     const arr = [...state.activeLayers];
     const i = arr.findIndex((l) => l.id === id);
     const j = i + dir;
-    if (i < 0 || j < 0 || j >= arr.length) return;
+    if (i < 0 || j < 0 || j >= arr.length || arr[i].locked || arr[j].locked) return;
     [arr[i], arr[j]] = [arr[j], arr[i]];
     set({ activeLayers: arr });
   },

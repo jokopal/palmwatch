@@ -9,7 +9,7 @@
       "type": "Feature",
       "properties": {
         "block_id": "BLK-001",
-        "estate": "Kalimantan Timur Estate A",
+        "estate": "Kebun 77 - Kotawaringin",
         "planting_year": 2012,
         "variety": "Tenera"
       },
@@ -28,7 +28,7 @@
       "type": "Feature",
       "properties": {
         "block_id": "BLK-002",
-        "estate": "Kalimantan Timur Estate A",
+        "estate": "Kebun 77 - Kotawaringin",
         "planting_year": 2010,
         "variety": "Tenera"
       },
@@ -47,7 +47,7 @@
       "type": "Feature",
       "properties": {
         "block_id": "BLK-003",
-        "estate": "Kalimantan Timur Estate A",
+        "estate": "Kebun 77 - Kotawaringin",
         "planting_year": 2015,
         "variety": "Tenera"
       },

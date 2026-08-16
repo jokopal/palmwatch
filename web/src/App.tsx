@@ -20,7 +20,7 @@ import AnalysisBar from "./components/AnalysisBar";
 import MobileShell from "./components/MobileShell";
 import { api } from "./api";
 import { supabase } from "./supabase";
-import { useMapStore } from "./store/mapStore";
+import { mapStore, useMapStore } from "./store/mapStore";
 import { useIsMobile } from "./useMediaQuery";
 import { listProjects, type Project } from "./projects";
 import { AuthProvider, fetchMyRole } from "./auth";
@@ -80,15 +80,31 @@ export default function App() {
   // Role (Fase 2 RBAC) — dari public.users; di preview via VITE_PREVIEW_ROLE.
   const [role, setRole] = useState<"admin" | "user">("user");
   const isAdmin = role === "admin";
+  // `role` default "user" sebelum fetchMyRole selesai — tandai kapan nilainya
+  // benar-benar diketahui agar keputusan berbasis role tidak salah start.
+  const [roleResolved, setRoleResolved] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   useEffect(() => {
     if (!authed) return;
     if (previewBypass) {
       setRole(import.meta.env.VITE_PREVIEW_ROLE === "user" ? "user" : "admin");
+      setRoleResolved(true);
     } else {
-      fetchMyRole().then(setRole).catch(() => setRole("user"));
+      fetchMyRole()
+        .then(setRole)
+        .catch(() => setRole("user"))
+        .finally(() => setRoleResolved(true));
     }
   }, [authed, session, previewBypass]);
+
+  // Role `user` memakai UserPanel (tanpa manajer layer), jadi ia tak punya cara
+  // mengaktifkan layer blok sendiri. Aktifkan otomatis — kalau tidak, tampilan
+  // viewer hanya basemap kosong. Admin tetap mulai dari kanvas bersih dan
+  // memilih layernya sendiri lewat Available Layers.
+  useEffect(() => {
+    if (!roleResolved || isAdmin) return;
+    mapStore.addBlocksLayer();
+  }, [roleResolved, isAdmin]);
 
   const reloadProjects = () => {
     listProjects().then((ps) => {

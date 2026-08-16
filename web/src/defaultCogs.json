@@ -1,0 +1,137 @@
+[
+  {
+    "id": "DEM_DEMNAS_8m",
+    "name": "DEM DEMNAS 8m",
+    "url": "/cogs/DEM_DEMNAS_8m.tif",
+    "category": "dem",
+    "colormap": "BrewerSpectral9",
+    "minValue": 0.59,
+    "maxValue": 13.81,
+    "bounds": [
+      111.698695,
+      -2.566232,
+      111.712871,
+      -2.555731
+    ]
+  },
+  {
+    "id": "DEM_Ortho_5m",
+    "name": "DEM Ortho 5m",
+    "url": "/cogs/DEM_Ortho_5m.tif",
+    "category": "dem",
+    "colormap": "Terrain",
+    "minValue": 15.95,
+    "maxValue": 73.59,
+    "bounds": [
+      111.698732,
+      -2.566199,
+      111.71286,
+      -2.555787
+    ]
+  },
+  {
+    "id": "Slope_Derajat",
+    "name": "Slope Derajat",
+    "url": "/cogs/Slope_Derajat.tif",
+    "category": "slope",
+    "colormap": "Magma",
+    "minValue": 0.0,
+    "maxValue": 3.0,
+    "bounds": [
+      111.698499,
+      -2.566397,
+      111.713051,
+      -2.555617
+    ]
+  },
+  {
+    "id": "TWI_Kebun",
+    "name": "TWI Kebun",
+    "url": "/cogs/TWI_Kebun.tif",
+    "category": "twi",
+    "colormap": "Teal",
+    "minValue": 8.6,
+    "maxValue": 19.1,
+    "bounds": [
+      111.698499,
+      -2.566397,
+      111.713051,
+      -2.555617
+    ]
+  },
+  {
+    "id": "HAND_Drainase",
+    "name": "HAND Drainase",
+    "url": "/cogs/HAND_Drainase.tif",
+    "category": "hand",
+    "colormap": "Blues",
+    "minValue": 0.0,
+    "maxValue": 9.7,
+    "bounds": [
+      111.698499,
+      -2.566397,
+      111.713051,
+      -2.555617
+    ]
+  },
+  {
+    "id": "pH_Tanah",
+    "name": "pH Tanah",
+    "url": "/cogs/pH_Tanah.tif",
+    "category": "soil",
+    "colormap": "YlOrBr",
+    "minValue": 4.7,
+    "maxValue": 5.4,
+    "bounds": [
+      111.698499,
+      -2.566397,
+      111.713051,
+      -2.555617
+    ]
+  },
+  {
+    "id": "SOC_Karbon_Organik",
+    "name": "SOC Karbon Organik",
+    "url": "/cogs/SOC_Karbon_Organik.tif",
+    "category": "soil",
+    "colormap": "Oranges",
+    "minValue": 117.6,
+    "maxValue": 171.7,
+    "bounds": [
+      111.698499,
+      -2.566397,
+      111.713051,
+      -2.555617
+    ]
+  },
+  {
+    "id": "Tekstur_Liat",
+    "name": "Tekstur Liat",
+    "url": "/cogs/Tekstur_Liat.tif",
+    "category": "soil",
+    "colormap": "YlGn",
+    "minValue": 33.8,
+    "maxValue": 40.3,
+    "bounds": [
+      111.698499,
+      -2.566397,
+      111.713051,
+      -2.555617
+    ]
+  },
+  {
+    "id": "Curah_Hujan_Tahunan",
+    "name": "Curah Hujan Tahunan",
+    "url": "/cogs/Curah_Hujan_Tahunan.tif",
+    "category": "rainfall",
+    "colormap": "Blues",
+    "minValue": 3281.11,
+    "maxValue": 3307.61,
+    "bounds": [
+      111.650511,
+      -2.600012,
+      111.750511,
+      -2.550012
+    ]
+  }
+]

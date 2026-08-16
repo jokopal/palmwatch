@@ -45,9 +45,38 @@ function rowToAvailable(r: RasterRow): AvailableLayer {
   };
 }
 
+import defaultCogs from "./defaultCogs.json";
+
+function getDefaultRasterLayers(): AvailableLayer[] {
+  return (defaultCogs as Array<{
+    id: string;
+    name: string;
+    url: string;
+    category: string;
+    colormap: string;
+    minValue: number;
+    maxValue: number;
+    bounds: [number, number, number, number];
+  }>).map((c) => ({
+    id: `rast-${c.id}`,
+    name: c.name,
+    group: "raster" as const,
+    sourceRef: c.id,
+    rasterConfig: {
+      url: c.url,
+      colormap: c.colormap,
+      minValue: c.minValue,
+      maxValue: c.maxValue,
+      bounds: c.bounds,
+      category: c.category,
+      opacity: 1,
+    },
+  }));
+}
+
 /** Daftar raster untuk project (+ raster global project_id null). */
 export async function listRasterLayers(projectId: string | null): Promise<AvailableLayer[]> {
-  if (!supabase) return [];
+  if (!supabase) return getDefaultRasterLayers();
   let q = supabase
     .from("raster_layers")
     .select("id,name,storage_path,category,bounds,colormap,min_value,max_value,opacity")
@@ -55,11 +84,12 @@ export async function listRasterLayers(projectId: string | null): Promise<Availa
   // RLS sudah membatasi ke member; filter tambahan agar hanya project aktif + global.
   if (projectId) q = q.or(`project_id.eq.${projectId},project_id.is.null`);
   const { data, error } = await q;
-  if (error) {
-    console.warn("listRasterLayers:", error.message);
-    return [];
+  if (error || !data || data.length === 0) {
+    if (error) console.warn("listRasterLayers:", error.message);
+    return getDefaultRasterLayers();
   }
-  return (data as RasterRow[] ?? []).map(rowToAvailable);
+  const dbLayers = (data as RasterRow[]).map(rowToAvailable);
+  return [...dbLayers, ...getDefaultRasterLayers().filter((d) => !dbLayers.some((b) => b.name === d.name))];
 }
 
 export interface InsertRasterMeta {

@@ -65,6 +65,57 @@ diperbaiki & diverifikasi:
 - ✅ **Loading skeleton** — `LoadingOverlay.tsx`; peta tak lagi tampil kosong
   tanpa penjelasan selagi `blocks_geojson` dimuat.
 
+## 🩹 Perbaikan render & simbologi (keluhan: layer tak terlihat, simbologi, apply)
+
+- ✅ **Urutan tumpukan ditegakkan** — `web/src/map/layerIds.ts` (BARU).
+  `syncOverlayLayers`/`syncRasterLayers` memanggil `addLayer` tanpa `beforeId`,
+  jadi urutan peta = urutan penambahan: layer baru selalu menimpa yang lama dan
+  tombol ↑↓ **tidak berefek apa pun**. Kini store memakai konvensi QGIS
+  (indeks 0 = paling atas, layer baru masuk di atas) dan MapView menegakkannya
+  ke MapLibre lewat `moveLayer`. Raster COG dipaksa selalu di bawah seluruh
+  vektor — satu DEM full-extent dulu menutupi semua poligon.
+- ✅ **Reference layer akhirnya berwarna per kelas** — `defaultReferenceSymbology`
+  tak pernah mengisi `categoryField`, sehingga `fillColorExpr` jatuh ke warna
+  tunggal: SEMUA reference layer tampil hijau polos dan editor kategori
+  tersembunyi. Kini `categoryField` diturunkan dari field diagnostik, dan
+  `updateReferenceConfig` meregenerasi kategori tiap kelas/field berubah
+  (dulu hasil "Auto-detect" tak pernah sampai ke peta).
+- ✅ **Panel properti jadi live** — draft lokal + tombol "Apply" dibuang; tiap
+  ubahan langsung ke store sehingga peta berubah seketika. Yang tersisa hanya
+  "Simpan konfigurasi ke DB" (satu-satunya aksi yang menulis ke database).
+- ✅ **Kontrol raster ada di panel** — opacity/skema warna/rentang nilai kini
+  bisa diubah setelah layer aktif (`updateRasterConfig`); MapView membangun
+  ulang source saat colormap/rentang berubah karena nilainya tertanam di URL
+  `cog://`. Sebelumnya slider opacity di panel tak menyentuh `rasterConfig`
+  sama sekali — persis keluhan "apply tidak berpengaruh".
+- ✅ **Raster di luar AOI tidak lagi hilang diam-diam** — `clipRasterToBoundary`
+  default ON + `setMask` global membuat COG yang tak bersinggungan dengan batas
+  blok terpotong habis. Kini bbox dicek dulu; bila tak bersinggungan masking
+  dilewati dan alasannya muncul sebagai badge di daftar layer.
+- ✅ **Kegagalan layer terlihat** — state `layerErrors` diisi dari event `error`
+  MapLibre (COG rusak/404/CORS) dan ditampilkan sebagai badge "gagal" + pesan di
+  panel properti. Layer GEE diberi badge "tak dirender" (memang belum ada
+  pipeline tile) alih-alih membiarkan pengguna menunggu sesuatu yang tak akan
+  muncul.
+- ✅ **Performa & korektness render** — `setData()` hanya dipanggil bila GeoJSON
+  benar-benar berganti (dulu tiap emit store, jadi menggeser slider mem-parse
+  ulang seluruh FeatureCollection); rekonsiliasi memakai ref, bukan
+  `map.getStyle()`; handler klik blok didaftarkan sekali (dulu menumpuk tiap
+  layer blok dimatikan/dihidupkan).
+- ✅ **Regresi "tanpa layer default" ditutup** — sejak `activeLayers` mulai
+  kosong, tampilan **share publik** dan role **user** (yang tak punya manajer
+  layer) hanya menampilkan basemap kosong. Keduanya kini mengaktifkan layer
+  blok otomatis; admin tetap mulai dari kanvas bersih. Layer blok juga kini
+  bisa dilepas kembali (dulu `removeLayer` menolaknya → tombol "+ ADD" terkunci
+  selamanya).
+
+> Catatan verifikasi: paint MapLibre tak bisa diuji di environment agent (render
+> loop berhenti saat Browser pane tak ditampilkan). Yang diverifikasi langsung
+> di browser: seluruh logika store + fungsi urutan (`__layerOrder` debug hook),
+> termasuk uji anti-loop emit. Tampilan akhir perlu dicek mata di browser Anda.
+
+---
+
 ### ⚠️ Temuan yang WAJIB diketahui sesi berikutnya
 
 **DB live pernah menyimpang jauh dari folder migrasi.** Introspeksi 2026-08-06

@@ -19,6 +19,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+try:
+    import fiona
+    if not hasattr(fiona, "path"):
+        import fiona._path
+        if not hasattr(fiona._path, "ParsedPath") and hasattr(fiona._path, "_ParsedPath"):
+            fiona._path.ParsedPath = fiona._path._ParsedPath
+        fiona.path = fiona._path
+except ImportError:
+    pass
+
 import geopandas as gpd
 
 from utils.logger import get_logger
