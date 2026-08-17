@@ -45,6 +45,7 @@ export default function SharedView({ token }: { token: string }) {
         setState("ok");
 
         // Set up active layers pada store
+        mapStore.setBlocksData(d.blocks as unknown as GeoJSON.FeatureCollection);
         mapStore.addBlocksLayer();
 
         // Layer vektor dimuat per layer. Yang ringan langsung ditarik; yang

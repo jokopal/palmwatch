@@ -132,6 +132,14 @@ export interface AnalysisResult {
   saved: boolean;
 }
 
+/**
+ * Nama layer batas blok.
+ *
+ * Dulu "Harvest Blocks" — peninggalan seed demo berbahasa Inggris, padahal
+ * isinya batas kebun sungguhan dan seluruh UI lain berbahasa Indonesia.
+ */
+export const BLOCKS_LAYER_NAME = "Batas Blok Kebun";
+
 // ── Urutan tumpukan (z-order) ────────────────────────────────────────────────
 // KONVENSI: `activeLayers[0]` = paling ATAS (seperti daftar layer QGIS), layer
 // yang baru ditambahkan masuk di indeks 0. MapView menegakkan urutan ini ke
@@ -181,7 +189,7 @@ export interface MapState {
   activeLayers: ActiveLayer[];
   selectedLayerId: string | null;
   dbLayers: AvailableLayer[];
-  leftTab: "layers" | "upload";
+  leftTab: "layers" | "upload" | "info";
   threeD: boolean;
   // Baru:
   tableLayer: TableLayerConfig | null;
@@ -189,6 +197,20 @@ export interface MapState {
   analysisRunning: boolean;
   temporalGroupId: string | null;  // layer_group dipilih untuk temporal
   rasterLayers: AvailableLayer[];  // katalog raster COG dari DB (group === "raster")
+  /**
+   * FeatureCollection blok dari API.
+   *
+   * Disimpan di store agar layer blok bisa diperlakukan sama seperti layer
+   * vektor lain: field-nya bisa ditelusuri untuk dropdown simbologi, kelasnya
+   * bisa dideteksi otomatis, dan legendanya dihitung dari data nyata. Sebelum
+   * ini panel properti memakai daftar field statis dan legenda status
+   * di-hardcode ke priority_level, sehingga menampilkan kategori kosong untuk
+   * kebun yang belum dianalisis.
+   *
+   * MapView tetap menggambar blok dari prop `data`-nya sendiri; salinan di sini
+   * murni untuk introspeksi, dan syncOverlayLayers memang melewati kind "blocks".
+   */
+  blocksData: GeoJSON.FeatureCollection | null;
   /**
    * Kegagalan render per layer (id layer -> pesan). Diisi MapView saat MapLibre
    * melaporkan error pada source milik kita (COG rusak, 404, CORS, di luar AOI).
@@ -333,6 +355,7 @@ let state: MapState = {
   analysisRunning: false,
   temporalGroupId: null,
   rasterLayers: [],
+  blocksData: null,
   layerErrors: {},
 };
 
@@ -461,16 +484,26 @@ export const mapStore = {
       activeLayers: [
         {
           id: "layer-blocks",
-          name: "Harvest Blocks",
+          name: BLOCKS_LAYER_NAME,
           kind: "blocks",
           visible: true,
           symbology: defaultBlocksSymbology(),
+          data: state.blocksData ?? undefined,
         },
         ...state.activeLayers,
       ],
       selectedLayerId: "layer-blocks",
     });
   },
+
+  /** Pasok data blok dari API; layer blok yang sudah aktif ikut diperbarui. */
+  setBlocksData: (blocksData: GeoJSON.FeatureCollection | null) =>
+    set({
+      blocksData,
+      activeLayers: state.activeLayers.map((l) =>
+        l.kind === "blocks" ? { ...l, data: blocksData ?? undefined } : l,
+      ),
+    }),
 
   // Katalog raster COG dari DB
   setRasterLayers: (rasterLayers: AvailableLayer[]) => set({ rasterLayers }),
@@ -594,7 +627,7 @@ export const mapStore = {
   setTemporalGroupId: (temporalGroupId: string | null) => set({ temporalGroupId }),
 
   // Tab panel kiri
-  setLeftTab: (leftTab: "layers" | "upload") => set({ leftTab }),
+  setLeftTab: (leftTab: "layers" | "upload" | "info") => set({ leftTab }),
 
   // Mode 3D
   setThreeD: (threeD: boolean) => set({ threeD }),

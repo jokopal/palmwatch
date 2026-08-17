@@ -8,10 +8,16 @@ import { listRasterOverlays } from "../rasterOverlays";
 import { zoomToLayer } from "../map/zoomToLayer";
 import { useCapabilities } from "../auth";
 import { fetchPublishedView, applyPublishedView } from "../publishedLayers";
+import UserPanel from "./UserPanel";
+import type { Project } from "../projects";
+import type { Summary } from "../types";
 
 interface Props {
   projectId: string | null;
   onBlocksImported?: () => void;
+  /** Ringkasan kebun untuk tab Info (anggota project). */
+  project?: Project;
+  summary?: Summary | null;
 }
 
 // Panel kiri bertab: "Layers" + "Upload".
@@ -19,11 +25,17 @@ interface Props {
 // Dua jalur pemuatan, sesuai kapabilitas:
 //   admin   -> katalog layer DB, mulai dari kanvas bersih, susun sendiri
 //   anggota -> susunan yang DIPUBLIKASIKAN admin; tanpa katalog, tanpa upload
-export default function LeftPanel({ projectId, onBlocksImported }: Props) {
+export default function LeftPanel({ projectId, onBlocksImported, project, summary }: Props) {
   const tab = useMapStore((s) => s.leftTab);
   const caps = useCapabilities();
   const [loadingPublished, setLoadingPublished] = useState(false);
   const [publishedNote, setPublishedNote] = useState<string | null>(null);
+
+  // Tab "info" hanya ada untuk anggota; admin yang membuka sesi dengan tab itu
+  // tersimpan akan melihat badan panel kosong.
+  useEffect(() => {
+    if (caps.uploadData && tab === "info") mapStore.setLeftTab("layers");
+  }, [caps.uploadData, tab]);
 
   // ── Jalur anggota: pulihkan susunan terpublikasi ───────────────────────────
   useEffect(() => {
@@ -110,24 +122,36 @@ export default function LeftPanel({ projectId, onBlocksImported }: Props) {
 
   return (
     <div className="left-panel">
-      {/* Tab Upload disembunyikan sepenuhnya bila tak punya izin. Dulu ia hanya
-          dinonaktifkan — anggota melihat tab yang selamanya mati. */}
-      {caps.uploadData && (
-        <div className="left-tabs">
-          <button
-            className={`left-tab${tab === "layers" ? " active" : ""}`}
-            onClick={() => mapStore.setLeftTab("layers")}
-          >
-            Layers
-          </button>
+      {/* Tab Upload disembunyikan sepenuhnya bila tak punya izin — dulu ia hanya
+          dinonaktifkan, jadi anggota melihat tab yang selamanya mati.
+          Anggota mendapat tab "Info" berisi ringkasan kebun sebagai gantinya.
+
+          Info ditaruh sebagai TAB, bukan ditumpuk di atas daftar layer:
+          .user-panel dan .left-panel sama-sama menuntut height:100%, sehingga
+          menumpuknya membuat panel bawah terdorong keluar layar sepenuhnya. */}
+      <div className="left-tabs">
+        <button
+          className={`left-tab${tab === "layers" ? " active" : ""}`}
+          onClick={() => mapStore.setLeftTab("layers")}
+        >
+          Layer
+        </button>
+        {caps.uploadData ? (
           <button
             className={`left-tab${tab === "upload" ? " active" : ""}`}
             onClick={() => mapStore.setLeftTab("upload")}
           >
             Upload
           </button>
-        </div>
-      )}
+        ) : (
+          <button
+            className={`left-tab${tab === "info" ? " active" : ""}`}
+            onClick={() => mapStore.setLeftTab("info")}
+          >
+            Info Kebun
+          </button>
+        )}
+      </div>
 
       <div className="left-tab-body">
         {loadingPublished && (
@@ -143,6 +167,8 @@ export default function LeftPanel({ projectId, onBlocksImported }: Props) {
             onRefLayersChanged={() => { reloadDbLayers(); mapStore.setLeftTab("layers"); }}
             onRastersChanged={() => { reloadDbLayers(); mapStore.setLeftTab("layers"); }}
           />
+        ) : !caps.uploadData && tab === "info" ? (
+          <UserPanel project={project} summary={summary ?? null} embedded />
         ) : (
           <LayersTab onAddDb={handleAddDb} projectId={projectId} />
         )}

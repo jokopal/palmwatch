@@ -140,7 +140,12 @@ export default function App() {
 
   const reloadData = () => {
     api.summary(projectId).then(setSummary).catch((e) => setError(String(e)));
-    api.blocks(projectId).then(setData).catch((e) => setError(String(e)));
+    api.blocks(projectId).then((fc) => {
+      setData(fc);
+      // Layer blok butuh datanya di store agar simbologinya bisa diturunkan
+      // dari field nyata, bukan dari daftar field yang di-hardcode.
+      mapStore.setBlocksData(fc as unknown as GeoJSON.FeatureCollection);
+    }).catch((e) => setError(String(e)));
   };
 
   // Fetch data blok/summary di-scope per project.
@@ -361,22 +366,16 @@ export default function App() {
           {/* Right Area — admin: layer workspace; user: viewer + input stub */}
           <Panel defaultSize={25} minSize={0} collapsible={true}>
             {caps.styleLayers ? (
-              // Anggota project kini ikut mendapat manajer layer (simbologi,
-              // urutan, nyala/mati), dengan kartu ringkasan kebun di atasnya.
-              // Yang tidak mereka miliki: katalog Available Layers & tab Upload.
-              <div className="right-stack">
-                {!caps.manageLayerSet && (
-                  <UserPanel
-                    project={projects.find((p) => p.id === projectId)}
-                    summary={summary}
-                    compact
-                  />
-                )}
-                <LeftPanel
-                  projectId={projectId}
-                  onBlocksImported={() => { reloadProjects(); reloadData(); }}
-                />
-              </div>
+              // Anggota project ikut mendapat manajer layer (simbologi, urutan,
+              // nyala/mati) lewat tab "Layer", dan ringkasan kebun lewat tab
+              // "Info Kebun". Yang tidak mereka miliki: katalog Available
+              // Layers dan tab Upload.
+              <LeftPanel
+                projectId={projectId}
+                project={projects.find((p) => p.id === projectId)}
+                summary={summary}
+                onBlocksImported={() => { reloadProjects(); reloadData(); }}
+              />
             ) : (
               <UserPanel
                 project={projects.find((p) => p.id === projectId)}

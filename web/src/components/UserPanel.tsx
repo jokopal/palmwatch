@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { PRIORITY_COLOR, PRIORITY_LABEL } from "../api";
+import { useMemo, useState } from "react";
+import { useMapStore } from "../store/mapStore";
 import type { Summary } from "../types";
 import type { Project } from "../projects";
 
@@ -7,11 +7,12 @@ interface Props {
   project?: Project;
   summary: Summary | null;
   /**
-   * Ringkas: hanya kartu project & legenda. Dipakai saat panel ini ditumpuk
-   * di atas manajer layer milik anggota project, sehingga menu input lapangan
-   * dan catatan read-only tidak mengambil ruang dua kali.
+   * Dirender sebagai isi tab di dalam LeftPanel, bukan sebagai kolom mandiri.
+   * Kelas `.user-panel` memasang height:100% + overflow sendiri; di dalam
+   * `.left-tab-body` yang sudah menggulir, itu menghasilkan dua area gulir
+   * bersarang dan tinggi yang saling berebut.
    */
-  compact?: boolean;
+  embedded?: boolean;
 }
 
 // Menu input lapangan (ground truth) — sesuai context.md. STUB: hanya menu,
@@ -26,7 +27,7 @@ const INPUT_FORMS = [
 
 // Panel kanan untuk role USER: read-only. Menggantikan layer workspace (yang
 // khusus admin) dengan info project, legenda, dan menu Input Lapangan (stub).
-export default function UserPanel({ project, summary, compact = false }: Props) {
+export default function UserPanel({ project, summary, embedded = false }: Props) {
   const [toast, setToast] = useState<string | null>(null);
 
   const notify = () => {
@@ -35,7 +36,7 @@ export default function UserPanel({ project, summary, compact = false }: Props) 
   };
 
   return (
-    <div className="user-panel">
+    <div className={`user-panel${embedded ? " embedded" : ""}`}>
       {/* Project info */}
       <div className="sidebar-section">
         <h3 className="sidebar-title">Project</h3>
@@ -52,7 +53,7 @@ export default function UserPanel({ project, summary, compact = false }: Props) 
             )}
           </div>
         </div>
-        {!compact && (
+        {(
           <div className="up-readonly-note">
             👁 Mode lihat — susunan layer ditentukan admin. Anda tetap bisa
             mengatur simbologi, urutan, dan menyalakan/mematikan layer.
@@ -60,22 +61,10 @@ export default function UserPanel({ project, summary, compact = false }: Props) 
         )}
       </div>
 
-      {/* Legenda status */}
-      <div className="sidebar-section">
-        <h3 className="sidebar-title">Legenda Status Blok</h3>
-        <div className="up-legend">
-          {(["critical", "warning", "monitor", "normal", "no_data"] as const).map((k) => (
-            <div className="up-legend-row" key={k}>
-              <span className="up-legend-sw" style={{ background: PRIORITY_COLOR[k] }} />
-              {PRIORITY_LABEL[k]}
-              <span className="up-legend-n">{summary?.by_priority?.[k] ?? 0}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Legenda blok — diturunkan dari simbologi yang SEDANG dipakai */}
+      <BlocksLegend />
 
-      {/* Input lapangan (stub) — disembunyikan dalam mode ringkas */}
-      {!compact && (
+      {/* Input lapangan (stub) */}
       <div className="sidebar-section" style={{ flex: 1, minHeight: 0 }}>
         <h3 className="sidebar-title">Input Lapangan</h3>
         <div className="up-input-hint">Laporkan data lapangan per blok (segera hadir).</div>
@@ -91,9 +80,76 @@ export default function UserPanel({ project, summary, compact = false }: Props) 
           ))}
         </ul>
       </div>
-      )}
 
       {toast && <div className="up-toast">{toast}</div>}
+    </div>
+  );
+}
+
+// ── Legenda layer blok ───────────────────────────────────────────────────────
+//
+// Dulu legenda ini di-hardcode ke empat tingkat priority_level dan selalu
+// menampilkan keempatnya, termasuk saat semuanya nol — persis yang terjadi pada
+// kebun yang belum pernah dianalisis: "Kritis 0, Peringatan 0, Pantau 0, Sehat 0".
+//
+// Sekarang legenda dibaca dari simbologi layer blok yang sedang aktif dan
+// jumlahnya dihitung dari data blok yang sebenarnya. Jadi kalau simbologinya
+// diubah ke field lain (varietas, tahun tanam, atau nanti hasil analisis),
+// legendanya ikut berubah dengan sendirinya.
+function BlocksLegend() {
+  const blocks = useMapStore((s) => s.activeLayers.find((l) => l.kind === "blocks"));
+
+  const rows = useMemo(() => {
+    if (!blocks) return [];
+    const sym = blocks.symbology;
+    const feats = blocks.data?.features ?? [];
+
+    if (sym.mode !== "categorized" || !sym.categoryField || sym.categories.length === 0) {
+      return [{ color: sym.fill, label: blocks.name, n: feats.length }];
+    }
+
+    const field = sym.categoryField;
+    const count = new Map<string, number>();
+    for (const f of feats) {
+      const v = f.properties?.[field];
+      const key = v == null ? "no_data" : String(v);
+      count.set(key, (count.get(key) ?? 0) + 1);
+    }
+    // Hanya kategori yang benar-benar muncul di data. Menampilkan kelas kosong
+    // membuat pengguna mengira sistem sudah menilai dan hasilnya nol.
+    return sym.categories
+      .map((c) => ({ color: c.color, label: c.label, n: count.get(c.value) ?? 0 }))
+      .filter((r) => r.n > 0);
+  }, [blocks]);
+
+  if (!blocks) return null;
+
+  const field = blocks.symbology.categoryField;
+
+  return (
+    <div className="sidebar-section">
+      <h3 className="sidebar-title">Legenda {blocks.name}</h3>
+      {rows.length === 0 ? (
+        <div className="up-legend-empty">
+          Belum ada nilai pada field <span className="bd-code">{field ?? "—"}</span>.
+          Legenda akan terisi setelah data tersedia.
+        </div>
+      ) : (
+        <div className="up-legend">
+          {rows.map((r) => (
+            <div className="up-legend-row" key={r.label}>
+              <span className="up-legend-sw" style={{ background: r.color }} />
+              {r.label}
+              <span className="up-legend-n">{r.n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {field && (
+        <div className="up-legend-field">
+          Diklasifikasi menurut <span className="bd-code">{field}</span>
+        </div>
+      )}
     </div>
   );
 }

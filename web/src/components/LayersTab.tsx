@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  GEE_AVAILABLE, mapStore, useMapStore,
+  BLOCKS_LAYER_NAME, GEE_AVAILABLE, mapStore, useMapStore,
   type AvailableLayer, type ActiveLayer,
 } from "../store/mapStore";
 import LayerPropertiesPanel from "./LayerPropertiesPanel";
@@ -150,7 +150,7 @@ export default function LayersTab({ onAddDb, projectId }: Props) {
         <ul className="layer-list">
           <li>
             <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
-              <span>Harvest Blocks</span>
+              <span>{BLOCKS_LAYER_NAME}</span>
               <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
                 AOI · Batas blok kebun & area penelitian
               </span>

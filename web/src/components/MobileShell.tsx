@@ -79,10 +79,12 @@ export default function MobileShell({
         onClose={closeSheet}
       >
         {caps.styleLayers ? (
-          <div className="right-stack">
-            {!caps.manageLayerSet && <UserPanel project={activeProject} summary={summary} compact />}
-            <LeftPanel projectId={projectId} onBlocksImported={onBlocksImported} />
-          </div>
+          <LeftPanel
+            projectId={projectId}
+            project={activeProject}
+            summary={summary}
+            onBlocksImported={onBlocksImported}
+          />
         ) : (
           <UserPanel project={activeProject} summary={summary} />
         )}

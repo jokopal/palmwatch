@@ -24,12 +24,14 @@ const BLOCK_FIELDS = [
 
 /** Nama field yang benar-benar ada pada data layer (untuk dropdown). */
 function fieldsOf(layer: ActiveLayer): string[] {
-  if (layer.kind === "blocks") return BLOCK_FIELDS;
   const feats = layer.data?.features ?? [];
   const keys = new Set<string>();
   for (const f of feats.slice(0, 20)) {
     for (const k of Object.keys(f.properties ?? {})) keys.add(k);
   }
+  // Layer blok kini menyimpan datanya di store, jadi jalur generik di atas
+  // berlaku juga untuknya. Daftar statis hanya cadangan bila data belum termuat.
+  if (keys.size === 0 && layer.kind === "blocks") return BLOCK_FIELDS;
   return [...keys].sort();
 }
 
@@ -67,6 +69,26 @@ export default function LayerPropertiesPanel() {
   const isGee = layer.kind === "gee";
 
   const patchSym = (p: Partial<Symbology>) => mapStore.updateSymbology(layer.id, p);
+
+  /**
+   * Ganti field kategori DAN turunkan ulang kelasnya dari data.
+   *
+   * Mengganti field saja tidak cukup: kategori lama tetap terpasang, sehingga
+   * ekspresi warna mencocokkan nilai yang tak pernah muncul di field baru dan
+   * seluruh fitur jatuh ke warna fallback. Inilah sebabnya simbologi terasa
+   * "tidak berdasarkan data".
+   */
+  const changeCategoryField = (field: string) => {
+    if (!field) { patchSym({ categoryField: undefined }); return; }
+    const data = layer.data;
+    if (!data) { patchSym({ categoryField: field }); return; }
+    const classes = detectClasses(data, field);
+    patchSym({
+      categoryField: field,
+      mode: classes.length > 0 ? "categorized" : "single",
+      categories: classes.map((c) => ({ value: c.value, color: c.color, label: c.label })),
+    });
+  };
   const setCatColor = (i: number, color: string) =>
     patchSym({ categories: sym.categories.map((c, j) => (j === i ? { ...c, color } : c)) });
 
@@ -178,19 +200,23 @@ export default function LayerPropertiesPanel() {
             >
               <option value="single">Warna tunggal</option>
               <option value="categorized" disabled={!canCategorize}>
-                {canCategorize ? `Per kategori (${sym.categoryField ?? "-"})` : "Per kategori (belum ada kelas)"}
+                {canCategorize ? `Per kategori (${sym.categoryField ?? "-"})` : "Per kategori (pilih field dulu)"}
               </option>
             </select>
           </div>
 
-          {sym.mode === "categorized" && canCategorize && (
+          {/* Pemilih field SELALU tampil selama layer punya data. Dulu ia hanya
+              muncul setelah mode "categorized" aktif, sedangkan mode itu sendiri
+              baru bisa dipilih kalau kategori sudah ada — jalan buntu: tidak ada
+              pintu masuk untuk mengklasifikasi layer dari nol. */}
+          {fields.length > 0 && (
             <div className="sym-row">
               <label>Field kategori</label>
               <select
                 value={sym.categoryField ?? ""}
-                onChange={(e) => patchSym({ categoryField: e.target.value || undefined })}
+                onChange={(e) => changeCategoryField(e.target.value)}
               >
-                <option value="">— pilih field —</option>
+                <option value="">— warna tunggal —</option>
                 {fields.map((f) => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>

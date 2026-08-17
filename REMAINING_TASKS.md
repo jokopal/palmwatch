@@ -111,6 +111,51 @@ tidak dikenal library, dan URL-nya relatif.
 
 ---
 
+## 🎛️ Panel layer untuk anggota & simbologi dari data (SELESAI)
+
+Tiga perbaikan setelah tinjauan tampilan role `user`.
+
+**1. Anggota tidak melihat daftar layer aktif — bug dari saya sendiri.**
+`.user-panel` dan `.left-panel` sama-sama memasang `height: 100%`. Saat saya
+menumpuk keduanya di `.right-stack` dengan `flex-shrink: 0`, UserPanel memakan
+seluruh tinggi kolom dan manajer layer terdorong keluar layar. Menumpuk dua
+komponen yang sama-sama merasa memiliki seluruh kolom memang salah — kini
+keduanya jadi **tab**: `Layer` dan `Info Kebun`.
+
+Aksi yang didapat anggota per layer: zoom `⛶`, edit simbologi `✎`, naik/turun
+`▲▼`, dan centang visibilitas. Yang tidak ada: tombol hapus, tombol kunci,
+katalog Available Layers, tab Upload, dan tombol Publikasikan.
+
+**2. Nama layer masih nama demo.** `"Harvest Blocks"` → konstanta
+`BLOCKS_LAYER_NAME = "Batas Blok Kebun"`. Sisa seed demo berbahasa Inggris pada
+data kebun sungguhan.
+
+**3. Simbologi & legenda tidak berasal dari data.**
+
+- `blocksData` kini disimpan di store. Sebelumnya layer blok tak punya `.data`,
+  sehingga panel properti memakai daftar field **statis** dan legenda
+  di-hardcode ke empat tingkat `priority_level`.
+- Mengganti field kategori kini **menurunkan ulang kelasnya dari data**
+  (`detectClasses`). Dulu hanya `categoryField` yang berubah sementara kategori
+  lama tetap terpasang, jadi ekspresi warna mencocokkan nilai yang tak pernah
+  ada dan semua fitur jatuh ke warna fallback — persis rasa "simbologi tidak
+  berdasarkan data".
+- Pemilih field kini selalu tampil. Dulu ia hanya muncul dalam mode
+  `categorized`, sedangkan mode itu baru bisa dipilih kalau kategori sudah ada:
+  jalan buntu tanpa pintu masuk.
+- Legenda diturunkan dari simbologi yang sedang aktif dan dihitung dari data,
+  serta **menyembunyikan kelas ber-nilai nol**. Terbukti: diklasifikasi menurut
+  `variety` → "Tenera 3 / Dura 2"; dikembalikan ke `priority_level` yang kosong
+  → hanya "Belum ada data 5", empat baris nol itu hilang.
+
+> Verifikasi tampilan role: `.claude/launch.json` punya konfigurasi
+> **web-as-user** (port 5174, `--mode preview`). Butuh `web/.env.preview`
+> (gitignored) berisi `VITE_PREVIEW_NO_AUTH=1`, `VITE_PREVIEW_ROLE=user|admin`,
+> plus salinan kredensial dari `web/.env.local`. Hanya berlaku di dev —
+> `import.meta.env.DEV` menghapus cabangnya dari bundel produksi.
+
+---
+
 ## 📢 Publikasi layer & akses per project (SELESAI)
 
 Migrasi `20260717000000_published_layer_view.sql` + `web/src/publishedLayers.ts`.
