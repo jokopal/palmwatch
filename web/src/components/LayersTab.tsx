@@ -7,9 +7,11 @@ import LayerPropertiesPanel from "./LayerPropertiesPanel";
 import { useCapabilities } from "../auth";
 import { isHidden, isReady } from "../features";
 import { canZoomToLayer, zoomToLayer } from "../map/zoomToLayer";
+import { publishLayers } from "../publishedLayers";
 
 interface Props {
   onAddDb: (a: AvailableLayer) => void;
+  projectId: string | null;
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -23,13 +25,26 @@ const KIND_LABEL: Record<string, string> = {
 // Tab "Layers": manajemen layer aktif dengan role badge, simbologi, dan proteksi block layer.
 // Block layer = singleton (tidak bisa dihapus, selalu ada di posisi terbawah stack).
 // Reference layers = multi, bisa reorder, hapus, dan edit konfigurasi diagnostik.
-export default function LayersTab({ onAddDb }: Props) {
+export default function LayersTab({ onAddDb, projectId }: Props) {
   const activeLayers = useMapStore((s) => s.activeLayers);
   const dbLayers     = useMapStore((s) => s.dbLayers);
   const rasterLayers = useMapStore((s) => s.rasterLayers);
   const tableLayer   = useMapStore((s) => s.tableLayer);
   const caps         = useCapabilities();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishMsg, setPublishMsg] = useState<string | null>(null);
+
+  const handlePublish = async () => {
+    if (!projectId) return;
+    setPublishing(true);
+    const res = await publishLayers(projectId);
+    setPublishing(false);
+    setPublishMsg(res.ok
+      ? `${res.nLayers} layer dipublikasikan. Anggota project akan melihat susunan ini.`
+      : `Gagal memublikasikan: ${res.error ?? "tidak diketahui"}`);
+    setTimeout(() => setPublishMsg(null), 5000);
+  };
 
   const activeRefs = new Set(activeLayers.map((l) => l.sourceRef));
   const hasBlocks = activeLayers.some((l) => l.kind === "blocks");
@@ -65,6 +80,28 @@ export default function LayersTab({ onAddDb }: Props) {
           </div>
         ))}
 
+        {/* Publikasi: susunan layer aktif admin menjadi titik awal bagi anggota
+            project. Tanpa ini, anggota tidak punya layer apa pun selain blok. */}
+        {caps.publishLayers && (
+          <div className="publish-row">
+            <button
+              className="publish-btn"
+              onClick={handlePublish}
+              disabled={publishing || !projectId || activeLayers.length === 0}
+              title={
+                !projectId ? "Pilih project terlebih dahulu"
+                : activeLayers.length === 0 ? "Tidak ada layer aktif untuk dipublikasikan"
+                : "Simpan susunan ini sebagai tampilan awal bagi anggota project"
+              }
+            >
+              {publishing ? "Memublikasikan…" : `📢 Publikasikan ${activeLayers.length} layer ke user`}
+            </button>
+          </div>
+        )}
+        {publishMsg && (
+          <div className={`lp-msg ${publishMsg.startsWith("Gagal") ? "err" : "ok"}`}>{publishMsg}</div>
+        )}
+
         {activeLayers.length > 1 && (
           <div className="layer-stack-hint">
             Urutan daftar = urutan gambar (teratas menutupi yang di bawah).
@@ -93,7 +130,7 @@ export default function LayersTab({ onAddDb }: Props) {
             <span className="table-layer-meta">
               {tableLayer.rows.length} baris · join: {tableLayer.joinField}
             </span>
-            {caps.editLayers && (
+            {caps.manageLayerSet && (
               <button className="layer-remove-btn"
                 onClick={() => mapStore.setTableLayer(null)} title="Hapus table layer">
                 x
@@ -104,7 +141,7 @@ export default function LayersTab({ onAddDb }: Props) {
       </div>
 
       {/* ── AVAILABLE LAYERS (admin only — user = read-only) ──── */}
-      {caps.editLayers && (
+      {caps.manageLayerSet && (
       <div className="sidebar-section" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         <h3 className="sidebar-title">Available Layers</h3>
 
@@ -262,8 +299,9 @@ function LayerItem({
           )}
         </div>
 
-        {/* Actions — hanya admin (user = read-only) */}
-        {caps.editLayers && (
+        {/* Aksi tampilan (zoom, simbologi, urutan) terbuka untuk anggota project;
+            mengubah SUSUNAN (kunci, hapus) tetap milik admin. */}
+        {caps.styleLayers && (
           <span className="layer-actions">
             <button
               className="layer-zoom-btn"
@@ -273,16 +311,18 @@ function LayerItem({
             >
               ⛶
             </button>
-            <button
-              className={`layer-lock-btn${isLocked ? " on" : ""}`}
-              onClick={() => {
-                if (isEditing && !isLocked) onToggleEdit(layer.id);
-                mapStore.toggleLayerLock(layer.id);
-              }}
-              title={isLocked ? "Buka kunci layer" : "Kunci layer agar tidak diedit"}
-            >
-              {isLocked ? "🔒" : "🔓"}
-            </button>
+            {caps.manageLayerSet && (
+              <button
+                className={`layer-lock-btn${isLocked ? " on" : ""}`}
+                onClick={() => {
+                  if (isEditing && !isLocked) onToggleEdit(layer.id);
+                  mapStore.toggleLayerLock(layer.id);
+                }}
+                title={isLocked ? "Buka kunci layer" : "Kunci layer agar tidak diedit"}
+              >
+                {isLocked ? "🔒" : "🔓"}
+              </button>
+            )}
             {!isLocked && (
               <>
                 <button
@@ -296,8 +336,12 @@ function LayerItem({
                   title="Naikkan ke atas tumpukan">▲</button>
                 <button disabled={idx >= total - 1} onClick={() => mapStore.reorderLayer(layer.id, 1)}
                   title="Turunkan di tumpukan">▼</button>
-                <button className="layer-remove-btn" onClick={() => mapStore.removeLayer(layer.id)}
-                  title={isBlock ? "Lepas layer blok dari peta" : "Hapus layer"}>✕</button>
+                {/* Menghapus layer hanya untuk admin: anggota tidak punya
+                    katalog untuk menambahkannya kembali. */}
+                {caps.manageLayerSet && (
+                  <button className="layer-remove-btn" onClick={() => mapStore.removeLayer(layer.id)}
+                    title={isBlock ? "Lepas layer blok dari peta" : "Hapus layer"}>✕</button>
+                )}
               </>
             )}
           </span>
@@ -305,7 +349,7 @@ function LayerItem({
       </div>
 
       {/* Inline layer properties panel (admin only, if not locked) */}
-      {isEditing && caps.editLayers && !isLocked && (
+      {isEditing && caps.styleLayers && !isLocked && (
         <div className="layer-sym-editor">
           <LayerPropertiesPanel />
         </div>

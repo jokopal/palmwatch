@@ -115,14 +115,14 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authed, session, previewBypass]);
 
-  // Non-admin memakai UserPanel (tanpa manajer layer), jadi tak punya cara
-  // mengaktifkan layer blok sendiri. Aktifkan otomatis — kalau tidak, tampilan
-  // viewer hanya basemap kosong. Admin tetap mulai dari kanvas bersih dan
-  // memilih layernya sendiri lewat Available Layers.
+  // Role tanpa manajer layer sama sekali (mis. guest) tak punya cara
+  // mengaktifkan layer blok sendiri — tanpa ini petanya basemap kosong.
+  // Anggota project TIDAK termasuk: LeftPanel memulihkan susunan terpublikasi
+  // milik admin, dan menambah blok di sini akan menduplikasi pekerjaan itu.
   useEffect(() => {
-    if (role === "loading" || caps.editLayers) return;
+    if (role === "loading" || caps.styleLayers) return;
     mapStore.addBlocksLayer();
-  }, [role, caps.editLayers]);
+  }, [role, caps.styleLayers]);
 
   const reloadProjects = () => {
     listProjects().then((ps) => {
@@ -360,12 +360,23 @@ export default function App() {
 
           {/* Right Area — admin: layer workspace; user: viewer + input stub */}
           <Panel defaultSize={25} minSize={0} collapsible={true}>
-            {caps.editLayers ? (
-              <LeftPanel
-                canUpload={caps.uploadData}
-                projectId={projectId}
-                onBlocksImported={() => { reloadProjects(); reloadData(); }}
-              />
+            {caps.styleLayers ? (
+              // Anggota project kini ikut mendapat manajer layer (simbologi,
+              // urutan, nyala/mati), dengan kartu ringkasan kebun di atasnya.
+              // Yang tidak mereka miliki: katalog Available Layers & tab Upload.
+              <div className="right-stack">
+                {!caps.manageLayerSet && (
+                  <UserPanel
+                    project={projects.find((p) => p.id === projectId)}
+                    summary={summary}
+                    compact
+                  />
+                )}
+                <LeftPanel
+                  projectId={projectId}
+                  onBlocksImported={() => { reloadProjects(); reloadData(); }}
+                />
+              </div>
             ) : (
               <UserPanel
                 project={projects.find((p) => p.id === projectId)}

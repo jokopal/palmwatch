@@ -56,7 +56,7 @@ export default function MobileShell({
   };
 
   const caps = useCapabilities();
-  const panelTitle = caps.editLayers ? "Layer & Data" : "Info Kebun";
+  const panelTitle = caps.manageLayerSet ? "Layer & Data" : "Layer Kebun";
   const activeProject = projects.find((p) => p.id === projectId);
 
   return (
@@ -78,8 +78,11 @@ export default function MobileShell({
         onToggleExpand={() => setExpanded((v) => !v)}
         onClose={closeSheet}
       >
-        {caps.editLayers ? (
-          <LeftPanel canUpload={caps.uploadData} projectId={projectId} onBlocksImported={onBlocksImported} />
+        {caps.styleLayers ? (
+          <div className="right-stack">
+            {!caps.manageLayerSet && <UserPanel project={activeProject} summary={summary} compact />}
+            <LeftPanel projectId={projectId} onBlocksImported={onBlocksImported} />
+          </div>
         ) : (
           <UserPanel project={activeProject} summary={summary} />
         )}
@@ -105,8 +108,8 @@ export default function MobileShell({
           <span className="m-tab-icon">🗺️</span><span className="m-tab-label">Peta</span>
         </button>
         <button className={`m-tab ${tab === "panel" ? "active" : ""}`} onClick={() => openTab("panel")}>
-          <span className="m-tab-icon">{caps.editLayers ? "🧩" : "📋"}</span>
-          <span className="m-tab-label">{caps.editLayers ? "Layer" : "Info"}</span>
+          <span className="m-tab-icon">{caps.styleLayers ? "🧩" : "📋"}</span>
+          <span className="m-tab-label">{caps.styleLayers ? "Layer" : "Info"}</span>
         </button>
         <button className={`m-tab ${tab === "analysis" ? "active" : ""}`} onClick={() => openTab("analysis")}>
           <span className="m-tab-icon">📊</span><span className="m-tab-label">Analisis</span>

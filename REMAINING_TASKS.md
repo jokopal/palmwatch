@@ -111,6 +111,48 @@ tidak dikenal library, dan URL-nya relatif.
 
 ---
 
+## 📢 Publikasi layer & akses per project (SELESAI)
+
+Migrasi `20260717000000_published_layer_view.sql` + `web/src/publishedLayers.ts`.
+
+**Masalah:** susunan layer aktif hanya hidup di memori browser admin. Tidak ada
+apa pun di database yang menyatakan "inilah yang saya ingin anggota project
+lihat", sehingga anggota hanya melihat batas blok.
+
+- ✅ Tabel `project_layer_views` — satu susunan terpublikasi per project
+  (urutan, simbologi, visibilitas). **GeoJSON tidak disimpan**, hanya
+  `source_ref`: satu layer garis di project ini saja 9 MB.
+- ✅ RPC `publish_project_layers` (admin saja, ditegakkan di dalam fungsi) dan
+  `get_project_layers` (anggota project). RLS: baca anggota, tulis admin.
+- ✅ Tombol **"📢 Publikasikan N layer ke user"** di header Layer Aktif.
+- ✅ `LeftPanel` punya dua jalur: admin memuat katalog DB; anggota memulihkan
+  susunan terpublikasi lalu menarik geojson per layer.
+
+**Kapabilitas dipecah** — `editLayers` dulu mengendalikan dua hal berbeda:
+
+| | admin | user |
+|---|---|---|
+| `styleLayers` — simbologi, urutan, nyala/mati | ✅ | ✅ |
+| `manageLayerSet` — tambah/hapus layer, katalog, kunci | ✅ | ❌ |
+| `publishLayers`, `uploadData`, `saveLayerConfig` | ✅ | ❌ |
+
+Anggota tidak boleh menghapus layer: mereka tidak punya katalog untuk
+menambahkannya kembali. Tab Upload kini disembunyikan sepenuhnya bagi mereka
+(dulu hanya dinonaktifkan — tab yang selamanya mati).
+
+**Manajemen user:** kolom checkbox per project diganti daftar chip akses +
+dropdown "beri akses". Dulu satu kolom per project — dengan satu project tampak
+seolah aplikasi hanya mengenal satu kebun, dengan sepuluh project tabelnya
+melebar sampai tak terbaca. Role admin ditandai "Semua project" karena
+`is_member()` memang selalu meloloskannya.
+
+Verifikasi (menyamar sebagai tiap role lewat klaim JWT): admin memublikasikan 2
+layer → anggota membacanya utuh → user mencoba memublikasikan **ditolak**
+(`Hanya admin yang boleh memublikasikan susunan layer`) → non-anggota membaca
+project lain dapat `NULL`.
+
+---
+
 ## 📊 Fase D — Empty state jujur & poles preview (SELESAI)
 
 Migrasi `20260716000000_phase_d_no_data_state.sql`:

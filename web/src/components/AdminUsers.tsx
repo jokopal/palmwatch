@@ -31,10 +31,18 @@ export default function AdminUsers({ projects, currentUserId, onClose }: Props) 
   const isMember = (uid: string, pid: string) =>
     members.some((m) => m.user_id === uid && m.project_id === pid);
 
-  const toggleAccess = async (uid: string, pid: string) => {
+  // Grant & revoke eksplisit, bukan toggle: dengan dropdown, aksi yang diminta
+  // pengguna sudah jelas arahnya, dan toggle hanya membuka peluang salah arah
+  // bila daftar keanggotaan sempat basi.
+  const grantAccess = async (uid: string, pid: string) => {
     setBusy(true);
-    const ok = isMember(uid, pid) ? await removeMember(pid, uid) : await addMember(pid, uid);
-    if (ok) setMembers(await listMemberships());
+    if (await addMember(pid, uid)) setMembers(await listMemberships());
+    setBusy(false);
+  };
+
+  const revokeAccess = async (uid: string, pid: string) => {
+    setBusy(true);
+    if (await removeMember(pid, uid)) setMembers(await listMemberships());
     setBusy(false);
   };
 
@@ -88,9 +96,7 @@ export default function AdminUsers({ projects, currentUserId, onClose }: Props) 
           <table className="admin-table">
             <thead>
               <tr>
-                <th>User</th><th>Role</th>
-                {projects.map((p) => <th key={p.id} className="admin-proj-col" title={p.name}>{p.name}</th>)}
-                <th></th>
+                <th>User</th><th>Role</th><th>Akses Project</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -107,14 +113,16 @@ export default function AdminUsers({ projects, currentUserId, onClose }: Props) 
                       <option value="admin">admin</option>
                     </select>
                   </td>
-                  {projects.map((p) => (
-                    <td key={p.id} className="admin-proj-col">
-                      <input type="checkbox" disabled={busy || u.role === "admin"}
-                        checked={u.role === "admin" || isMember(u.id, p.id)}
-                        title={u.role === "admin" ? "Admin akses semua project" : "Akses project"}
-                        onChange={() => toggleAccess(u.id, p.id)} />
-                    </td>
-                  ))}
+                  <td>
+                    <ProjectAccessCell
+                      user={u}
+                      projects={projects}
+                      memberOf={projects.filter((p) => isMember(u.id, p.id))}
+                      busy={busy}
+                      onGrant={(pid) => grantAccess(u.id, pid)}
+                      onRevoke={(pid) => revokeAccess(u.id, pid)}
+                    />
+                  </td>
                   <td>
                     {u.id !== currentUserId && (
                       <button className="admin-del" disabled={busy} onClick={() => handleDelete(u)} title="Hapus akun">🗑</button>
@@ -128,10 +136,81 @@ export default function AdminUsers({ projects, currentUserId, onClose }: Props) 
 
         {msg && <div className="admin-msg">{msg}</div>}
         <div className="admin-note">
-          Set role & akses project berlaku langsung (RLS). Buat/hapus <b>akun login</b>
-          butuh Edge Function <code>admin-users</code> (lihat panduan deploy).
+          Set role & akses project berlaku langsung (RLS). Admin selalu punya
+          akses ke seluruh project. Buat/hapus <b>akun login</b> butuh Edge
+          Function <code>admin-users</code> (lihat panduan deploy).
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Sel akses project ────────────────────────────────────────────────────────
+// Dulu tiap project jadi satu kolom checkbox. Dengan satu project itu terlihat
+// seolah aplikasi hanya mengenal satu kebun; dengan sepuluh project tabelnya
+// melebar sampai tak terbaca. Kini: daftar akses yang dimiliki + dropdown untuk
+// menambah, sehingga jumlah project tidak lagi mengubah lebar tabel.
+function ProjectAccessCell({
+  user, projects, memberOf, busy, onGrant, onRevoke,
+}: {
+  user: ManagedUser;
+  projects: Project[];
+  memberOf: Project[];
+  busy: boolean;
+  onGrant: (projectId: string) => void;
+  onRevoke: (projectId: string) => void;
+}) {
+  const [pick, setPick] = useState("");
+
+  if (user.role === "admin") {
+    return (
+      <span className="admin-access-all" title="Role admin melewati keanggotaan project">
+        Semua project
+      </span>
+    );
+  }
+
+  const available = projects.filter((p) => !memberOf.some((m) => m.id === p.id));
+
+  return (
+    <div className="admin-access">
+      <div className="admin-access-chips">
+        {memberOf.length === 0 ? (
+          <span className="admin-access-empty">Belum punya akses</span>
+        ) : (
+          memberOf.map((p) => (
+            <span className="admin-access-chip" key={p.id}>
+              {p.name}
+              <button
+                className="admin-access-x"
+                disabled={busy}
+                title={`Cabut akses ${p.name}`}
+                onClick={() => onRevoke(p.id)}
+              >
+                ✕
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+
+      {available.length > 0 && (
+        <div className="admin-access-add">
+          <select value={pick} disabled={busy} onChange={(e) => setPick(e.target.value)}>
+            <option value="">— pilih project —</option>
+            {available.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            className="admin-btn"
+            disabled={busy || !pick}
+            onClick={() => { onGrant(pick); setPick(""); }}
+          >
+            + Beri akses
+          </button>
+        </div>
+      )}
     </div>
   );
 }

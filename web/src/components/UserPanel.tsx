@@ -6,6 +6,12 @@ import type { Project } from "../projects";
 interface Props {
   project?: Project;
   summary: Summary | null;
+  /**
+   * Ringkas: hanya kartu project & legenda. Dipakai saat panel ini ditumpuk
+   * di atas manajer layer milik anggota project, sehingga menu input lapangan
+   * dan catatan read-only tidak mengambil ruang dua kali.
+   */
+  compact?: boolean;
 }
 
 // Menu input lapangan (ground truth) — sesuai context.md. STUB: hanya menu,
@@ -20,7 +26,7 @@ const INPUT_FORMS = [
 
 // Panel kanan untuk role USER: read-only. Menggantikan layer workspace (yang
 // khusus admin) dengan info project, legenda, dan menu Input Lapangan (stub).
-export default function UserPanel({ project, summary }: Props) {
+export default function UserPanel({ project, summary, compact = false }: Props) {
   const [toast, setToast] = useState<string | null>(null);
 
   const notify = () => {
@@ -46,7 +52,12 @@ export default function UserPanel({ project, summary }: Props) {
             )}
           </div>
         </div>
-        <div className="up-readonly-note">👁 Mode lihat — hanya admin yang dapat mengedit data & simbologi.</div>
+        {!compact && (
+          <div className="up-readonly-note">
+            👁 Mode lihat — susunan layer ditentukan admin. Anda tetap bisa
+            mengatur simbologi, urutan, dan menyalakan/mematikan layer.
+          </div>
+        )}
       </div>
 
       {/* Legenda status */}
@@ -63,7 +74,8 @@ export default function UserPanel({ project, summary }: Props) {
         </div>
       </div>
 
-      {/* Input lapangan (stub) */}
+      {/* Input lapangan (stub) — disembunyikan dalam mode ringkas */}
+      {!compact && (
       <div className="sidebar-section" style={{ flex: 1, minHeight: 0 }}>
         <h3 className="sidebar-title">Input Lapangan</h3>
         <div className="up-input-hint">Laporkan data lapangan per blok (segera hadir).</div>
@@ -79,6 +91,7 @@ export default function UserPanel({ project, summary }: Props) {
           ))}
         </ul>
       </div>
+      )}
 
       {toast && <div className="up-toast">{toast}</div>}
     </div>

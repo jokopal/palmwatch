@@ -11,8 +11,22 @@
 export type Role = "loading" | "guest" | "user" | "admin";
 
 export interface Capabilities {
-  /** Ubah simbologi, urutan, visibilitas, dan hapus layer aktif. */
-  editLayers: boolean;
+  /**
+   * Ubah tampilan layer yang SUDAH aktif: simbologi, urutan tumpukan, dan
+   * visibilitas. Ini pekerjaan lokal di browser dan tidak menulis apa pun ke
+   * database, jadi anggota project pun boleh melakukannya — mereka mengatur
+   * cara melihat, bukan mengubah data.
+   */
+  styleLayers: boolean;
+  /**
+   * Ubah SUSUNAN layer aktif: menambah dari katalog, menghapus dari daftar.
+   * Sengaja dipisah dari styleLayers. Anggota project menerima susunan yang
+   * dipublikasikan admin; kalau mereka bisa menghapus layer, tak ada jalan
+   * untuk menambahkannya kembali karena katalog tidak mereka miliki.
+   */
+  manageLayerSet: boolean;
+  /** Publikasikan susunan layer aktif sebagai titik awal bagi anggota project. */
+  publishLayers: boolean;
   /** Unggah data (SHP/GeoJSON/raster) ke database. */
   uploadData: boolean;
   /** Simpan konfigurasi diagnostik reference layer ke database. */
@@ -28,7 +42,9 @@ export interface Capabilities {
 }
 
 const NOTHING: Capabilities = {
-  editLayers: false,
+  styleLayers: false,
+  manageLayerSet: false,
+  publishLayers: false,
   uploadData: false,
   saveLayerConfig: false,
   runAnalysis: false,
@@ -48,7 +64,9 @@ export function capabilitiesFor(role: Role): Capabilities {
   switch (role) {
     case "admin":
       return {
-        editLayers: true,
+        styleLayers: true,
+        manageLayerSet: true,
+        publishLayers: true,
         uploadData: true,
         saveLayerConfig: true,
         runAnalysis: true,
@@ -57,7 +75,10 @@ export function capabilitiesFor(role: Role): Capabilities {
         viewDataPanels: true,
       };
     case "user":
-      return { ...NOTHING, viewDataPanels: true };
+      // Anggota project boleh mengatur CARA MELIHAT (simbologi, urutan,
+      // nyala/mati), tapi tidak boleh mengubah SUSUNANNYA — layer apa saja yang
+      // ada ditentukan admin lewat publikasi.
+      return { ...NOTHING, styleLayers: true, viewDataPanels: true };
     case "guest":
     case "loading":
     default:
