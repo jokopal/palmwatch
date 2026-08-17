@@ -30,6 +30,7 @@ export default function LayersTab({ onAddDb, projectId }: Props) {
   const dbLayers     = useMapStore((s) => s.dbLayers);
   const rasterLayers = useMapStore((s) => s.rasterLayers);
   const tableLayer   = useMapStore((s) => s.tableLayer);
+  const publishedAt  = useMapStore((s) => s.publishedAt);
   const caps         = useCapabilities();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -96,6 +97,15 @@ export default function LayersTab({ onAddDb, projectId }: Props) {
             >
               {publishing ? "Memublikasikan…" : `📢 Publikasikan ${activeLayers.length} layer ke user`}
             </button>
+            {/* Keadaan tersimpan. Tanpa penanda ini, publikasi terasa seperti
+                aksi tanpa jejak dan tak ada cara tahu susunan mana yang aktif. */}
+            <div className="publish-state">
+              {publishedAt
+                ? `Tersimpan · ${new Date(publishedAt).toLocaleString("id-ID", {
+                    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+                  })}`
+                : "Belum pernah dipublikasikan"}
+            </div>
           </div>
         )}
         {publishMsg && (

@@ -111,6 +111,47 @@ tidak dikenal library, dan URL-nya relatif.
 
 ---
 
+## 💾 Susunan layer benar-benar tersimpan (SELESAI)
+
+**Gejala:** "pengaturan layer yang diaktifkan admin tidak tersimpan; buka akun
+admin lagi pun mulai dari awal", plus `POST /auth/v1/token?grant_type=refresh_token`
+→ **400** di konsol.
+
+**Diagnosis:** penyimpanannya ternyata sudah benar. `project_layer_views` berisi
+1 baris **8 layer** dari akun admin, dan seluruh rujukannya utuh — enam raster
+cocok dengan manifest overlay, layer vektornya ada di `vector_layers`. Yang
+salah adalah **admin tidak pernah membacanya kembali**: jalur admin selalu
+memuat katalog lalu menambahkan reference layer terbaru, jadi susunan yang
+sudah dipublikasikan tidak pernah dipulihkan.
+
+- ✅ **Admin kini memulihkan susunan terpublikasi saat memuat.** Publikasi
+  menjadi keadaan tersimpan untuk SEMUA orang, admin termasuk. Perilaku lama
+  (tarik reference terbaru) hanya dipakai bila belum pernah ada publikasi.
+- ✅ Katalog di-`await` lebih dulu; cabang fallback dulu membaca `dbLayers`
+  dari store yang belum tentu sudah terisi.
+- ✅ **Penanda keadaan tersimpan** di bawah tombol: "Tersimpan · 17 Agu 04.19"
+  atau "Belum pernah dipublikasikan". Tanpa ini publikasi terasa tanpa jejak.
+
+**Error 400 auth:** refresh token basi di `localStorage` — bukan klien ganda
+(hanya ada satu `createClient`) dan bukan balapan refresh (supabase-js 2.108
+sudah mengunci). Dampaknya berbahaya karena senyap: aplikasi tampak masuk,
+tetapi setiap RPC ditolak sehingga susunan layer gagal dimuat **maupun**
+disimpan tanpa satu pun pesan di layar.
+
+- ✅ `fetchMyRole` kini membedakan `authInvalid` (token ditolak / JWT
+  kedaluwarsa) dari kegagalan lain. Hanya kasus itu yang memaksa keluar.
+- ✅ Sesi tak sah dibersihkan (`signOut({ scope: "local" })`) dan pengguna
+  diantar ke layar masuk dengan penjelasan, bukan dibiarkan di aplikasi
+  setengah hidup.
+
+Verifikasi: `applyPublishedView` diuji dengan payload asli dari database — 7
+dari 8 layer pulih (vektor butuh sesi login, yang memang tidak ada di mode
+preview), **urutan persis sama**, opacity & colormap raster ikut, dan nama
+lama "Harvest Blocks" otomatis menjadi "Batas Blok Kebun".
+`get_project_layers` mengembalikan 8 layer untuk admin maupun anggota.
+
+---
+
 ## 🎛️ Panel layer untuk anggota & simbologi dari data (SELESAI)
 
 Tiga perbaikan setelah tinjauan tampilan role `user`.

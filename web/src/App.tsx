@@ -88,6 +88,7 @@ export default function App() {
   // kontrol admin tidak pernah berkedip muncul lalu hilang.
   const [role, setRole] = useState<Role>("loading");
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const caps = capabilitiesFor(role);
   const [showUsers, setShowUsers] = useState(false);
 
@@ -106,8 +107,17 @@ export default function App() {
       if (res.ok) {
         setRole(res.role);
         setRoleError(null);
+      } else if (res.authInvalid) {
+        // Refresh token ditolak (HTTP 400 dari /auth/v1/token) atau JWT sudah
+        // kedaluwarsa. Token basi di localStorage membuat aplikasi tampak
+        // masuk padahal setiap panggilan RPC ditolak — susunan layer gagal
+        // dimuat maupun disimpan tanpa satu pun pesan di layar. Bersihkan
+        // sesinya dan minta masuk ulang.
+        setSessionExpired(true);
+        supabase?.auth.signOut({ scope: "local" }).catch(() => {});
+        setSession(null);
       } else {
-        // Gagal menentukan role = akses paling terbatas, tapi katakan sebabnya.
+        // Gagal karena sebab lain: akses paling terbatas, tapi katakan sebabnya.
         setRole("guest");
         setRoleError(res.reason);
       }
@@ -181,7 +191,7 @@ export default function App() {
   // VITE_PREVIEW_NO_AUTH (dev-only, opt-in) melewati gerbang auth untuk keperluan
   // preview/verifikasi UI peta tanpa sesi. JANGAN diaktifkan di production.
   if (supabase && !session && !previewBypass) {
-    return <Login />;
+    return <Login sessionExpired={sessionExpired} />;
   }
 
   return (

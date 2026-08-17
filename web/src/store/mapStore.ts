@@ -212,6 +212,12 @@ export interface MapState {
    */
   blocksData: GeoJSON.FeatureCollection | null;
   /**
+   * Kapan susunan layer terakhir dipublikasikan (ISO), null bila belum pernah.
+   * Ditampilkan di dekat tombol Publikasikan supaya admin tahu keadaan
+   * tersimpannya — tanpa ini publikasi terasa seperti aksi tanpa jejak.
+   */
+  publishedAt: string | null;
+  /**
    * Kegagalan render per layer (id layer -> pesan). Diisi MapView saat MapLibre
    * melaporkan error pada source milik kita (COG rusak, 404, CORS, di luar AOI).
    * Tanpa ini, layer yang gagal hanya "tidak terlihat" tanpa penjelasan apa pun.
@@ -356,6 +362,7 @@ let state: MapState = {
   temporalGroupId: null,
   rasterLayers: [],
   blocksData: null,
+  publishedAt: null,
   layerErrors: {},
 };
 
@@ -495,6 +502,8 @@ export const mapStore = {
       selectedLayerId: "layer-blocks",
     });
   },
+
+  setPublishedAt: (publishedAt: string | null) => set({ publishedAt }),
 
   /** Pasok data blok dari API; layer blok yang sudah aktif ikut diperbarui. */
   setBlocksData: (blocksData: GeoJSON.FeatureCollection | null) =>

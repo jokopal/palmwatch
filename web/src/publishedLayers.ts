@@ -53,7 +53,9 @@ export async function publishLayers(
     p_layers: layers,
   });
   if (error) return { ok: false, error: error.message };
-  return { ok: true, nLayers: (data as { n_layers?: number })?.n_layers ?? layers.length };
+  const res = data as { n_layers?: number; published_at?: string };
+  mapStore.setPublishedAt(res?.published_at ?? new Date().toISOString());
+  return { ok: true, nLayers: res?.n_layers ?? layers.length };
 }
 
 /** Ambil susunan terpublikasi. null = admin belum pernah memublikasikan. */
@@ -66,6 +68,7 @@ export async function fetchPublishedView(projectId: string): Promise<PublishedVi
   }
   if (!data) return null;
   const raw = data as { layers?: PublishedLayer[]; published_at?: string };
+  mapStore.setPublishedAt(raw.published_at ?? null);
   return { layers: raw.layers ?? [], publishedAt: raw.published_at ?? null };
 }
 

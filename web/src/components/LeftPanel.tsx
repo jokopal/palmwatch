@@ -71,40 +71,60 @@ export default function LeftPanel({ projectId, onBlocksImported, project, summar
     return () => { cancelled = true; };
   }, [projectId, caps.manageLayerSet]);
 
-  // ── Jalur admin: katalog layer DB + zoom ke reference terbaru ──────────────
+  // ── Jalur admin: katalog + PULIHKAN susunan terpublikasi ───────────────────
+  //
+  // Admin dulu selalu mulai dari kanvas bersih, jadi susunan yang sudah susah
+  // payah diatur dan dipublikasikan hilang begitu halaman dimuat ulang —
+  // publikasi terasa seperti aksi tanpa jejak. Sekarang susunan terpublikasi
+  // adalah keadaan tersimpan bagi SEMUA orang, admin termasuk.
   useEffect(() => {
     if (!caps.manageLayerSet) return;
     let cancelled = false;
 
-    listReferenceLayers(projectId ?? undefined).then((layers) => {
-      if (cancelled) return;
-      mapStore.setDbLayers(layers);
+    mapStore.setRasterLayers(listRasterOverlays());
 
-      const refs = layers.filter((l) => l.layerRole === "reference");
-      const latest = refs[0]; // API sudah order created_at desc → terbaru di index 0
-      if (latest?.sourceRef) {
-        const existing = mapStore.getState().activeLayers.find(
-          (l) => l.sourceRef === latest.sourceRef,
+    (async () => {
+      // Katalog di-await lebih dulu: cabang fallback di bawah membacanya dari
+      // store, dan tanpa await ia akan membaca daftar yang masih kosong.
+      const catalog = await listReferenceLayers(projectId ?? undefined).catch(() => []);
+      if (cancelled) return;
+      mapStore.setDbLayers(catalog);
+
+      if (!projectId) return;
+      setLoadingPublished(true);
+      const view = await fetchPublishedView(projectId);
+      if (cancelled) { setLoadingPublished(false); return; }
+
+      if (view && view.layers.length > 0) {
+        const n = await applyPublishedView(view);
+        if (cancelled) return;
+        setPublishedNote(
+          `Memuat ${n} layer dari susunan terpublikasi terakhir. ` +
+          `Ubah lalu tekan Publikasikan untuk menyimpan.`,
         );
-        if (existing) {
-          zoomToLayer(existing);
-        } else {
-          getVectorLayerGeojson(latest.sourceRef).then((g) => {
-            if (cancelled || !g) return;
-            mapStore.addDbLayer(latest, g);
-            const added = mapStore.getState().activeLayers.find(
-              (l) => l.sourceRef === latest.sourceRef,
-            );
-            if (added) zoomToLayer(added);
-          }).catch(() => {});
-        }
-      } else {
+        const first = mapStore.getState().activeLayers.find((l) => l.visible);
+        if (first) zoomToLayer(first);
+        setLoadingPublished(false);
+        return;
+      }
+
+      // Belum pernah dipublikasikan: perilaku lama — tarik reference terbaru
+      // supaya peta tidak kosong sama sekali saat pertama kali dibuka.
+      setLoadingPublished(false);
+      const latest = catalog.filter((l) => l.layerRole === "reference")[0];
+      if (!latest?.sourceRef) {
         const blk = mapStore.getState().activeLayers.find((l) => l.kind === "blocks");
         if (blk) zoomToLayer(blk);
+        return;
       }
-    }).catch(() => {});
-
-    mapStore.setRasterLayers(listRasterOverlays());
+      const existing = mapStore.getState().activeLayers.find((l) => l.sourceRef === latest.sourceRef);
+      if (existing) { zoomToLayer(existing); return; }
+      const g = await getVectorLayerGeojson(latest.sourceRef).catch(() => null);
+      if (cancelled || !g) return;
+      mapStore.addDbLayer(latest, g);
+      const added = mapStore.getState().activeLayers.find((l) => l.sourceRef === latest.sourceRef);
+      if (added) zoomToLayer(added);
+    })();
 
     return () => { cancelled = true; };
   }, [projectId, caps.manageLayerSet]); // eslint-disable-line react-hooks/exhaustive-deps

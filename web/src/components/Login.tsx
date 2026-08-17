@@ -20,7 +20,12 @@ function HexLogo({ size = 48 }: { size?: number }) {
   );
 }
 
-export default function Login() {
+interface LoginProps {
+  /** Sesi sebelumnya ditolak server (refresh token 400 / JWT kedaluwarsa). */
+  sessionExpired?: boolean;
+}
+
+export default function Login({ sessionExpired = false }: LoginProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -183,6 +188,25 @@ export default function Login() {
               Akses terbatas untuk personel terotorisasi.
             </div>
           </div>
+
+          {/* Sesi kedaluwarsa: pengguna tidak menekan keluar, jadi jelaskan
+              kenapa ia tiba-tiba berada di layar ini. */}
+          {sessionExpired && !error && (
+            <div style={{
+              background: "var(--warning-bg)",
+              color: "var(--warning)",
+              padding: "10px 14px",
+              borderRadius: "var(--r-md)",
+              fontSize: "12px",
+              marginBottom: "20px",
+              fontFamily: "var(--font-ui)",
+              border: "1px solid rgba(217,119,6,0.25)",
+              lineHeight: 1.5,
+            }}>
+              Sesi Anda sudah berakhir dan telah dibersihkan. Silakan masuk
+              kembali — susunan layer yang sudah dipublikasikan tetap tersimpan.
+            </div>
+          )}
 
           {/* Error message */}
           {error && (

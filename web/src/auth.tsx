@@ -39,7 +39,12 @@ export function useRoleLoading(): boolean {
 
 export type FetchRoleResult =
   | { ok: true; role: "admin" | "user" }
-  | { ok: false; reason: string };
+  /**
+   * `authInvalid` menandai sesi yang tidak sah lagi (refresh token ditolak,
+   * JWT kedaluwarsa) — berbeda dari kegagalan jaringan atau baris users hilang.
+   * Hanya kasus ini yang pantas memaksa keluar; sisanya cukup dilaporkan.
+   */
+  | { ok: false; reason: string; authInvalid?: boolean };
 
 /**
  * Ambil role user saat ini dari public.users.
@@ -53,10 +58,10 @@ export async function fetchMyRole(): Promise<FetchRoleResult> {
   if (!supabase) return { ok: false, reason: "Supabase tidak dikonfigurasi." };
 
   const { data: u, error: uErr } = await supabase.auth.getUser();
-  if (uErr) return { ok: false, reason: `Gagal membaca sesi: ${uErr.message}` };
+  if (uErr) return { ok: false, reason: `Sesi tidak sah: ${uErr.message}`, authInvalid: true };
 
   const uid = u?.user?.id;
-  if (!uid) return { ok: false, reason: "Tidak ada sesi login aktif." };
+  if (!uid) return { ok: false, reason: "Tidak ada sesi login aktif.", authInvalid: true };
 
   const { data, error } = await supabase.from("users").select("role").eq("id", uid).single();
   if (error) return { ok: false, reason: `Gagal membaca role: ${error.message}` };
