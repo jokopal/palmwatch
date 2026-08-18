@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BlockFeature, Timeseries } from "../types";
 import { api, priorityColor, priorityLabel } from "../api";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -6,12 +6,11 @@ import TimeSeriesChart from "./TimeSeriesChart";
 interface Props {
   feature: BlockFeature | null;
   onClose?: () => void;
+  clickCoords?: { x: number; y: number } | null;
   /** Sematkan di dalam sheet mobile (tanpa posisi float & tombol tutup). */
   embedded?: boolean;
 }
 
-// Kode kondisi dari overlay engine (overlay.py CONDITION_RULES) -> label lapangan.
-// Mandor tidak seharusnya membaca "rainfall_deficit_30d".
 const CONDITION_LABEL: Record<string, string> = {
   ndvi_critical: "NDVI sangat rendah",
   ndvi_low: "NDVI rendah (stres)",
@@ -45,16 +44,14 @@ const num = (v: number | null | undefined, digits = 2, unit = ""): string =>
 /**
  * Panel detail satu blok — "identify" ala SIG.
  *
- * Menampilkan seluruh rantai analitik untuk blok terpilih: pengukuran EO &
- * tanah (dengan provenance source), kondisi hasil overlay engine, rekomendasi
- * intervensi + lag effect berliteratur, proyeksi yield yang digerbang R², dan
- * tren temporal. Dipakai desktop (float di atas peta) maupun mobile (di dalam
- * sheet Analisis).
+ * Desktop: posisi dinamis mengikuti lokasi klik/centroid blok, menghindari
+ * tumpang tindih dengan legend panel. Mobile: embedded di sheet Analisis.
  */
-export default function BlockPanel({ feature, onClose, embedded = false }: Props) {
+export default function BlockPanel({ feature, onClose, clickCoords, embedded = false }: Props) {
   const blockId = feature?.properties.block_id ?? null;
   const [ts, setTs] = useState<Timeseries | null>(null);
   const [loadingTs, setLoadingTs] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     if (!blockId) { setTs(null); return; }
@@ -65,12 +62,49 @@ export default function BlockPanel({ feature, onClose, embedded = false }: Props
       .finally(() => setLoadingTs(false));
   }, [blockId]);
 
+  // Reset expand state saat blok berubah
+  useEffect(() => { setShowDetails(false); }, [blockId]);
+
+  // ── Dynamic positioning ───────────────────────────────────────────
+  // Panel selalu muncul CENTERED di sekitar titik klik, lalu di-clamp
+  // agar tidak keluar dari batas map container.
+  const posStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (embedded) return undefined;
+
+    const wrap = document.querySelector(".main-map-wrap");
+    if (!wrap) return undefined;
+    const rect = wrap.getBoundingClientRect();
+    const W = rect.width;
+    const H = rect.height;
+
+    const PANEL_W = 300;
+    const PANEL_MAX_H = H * 0.75;
+    const MARGIN = 14;
+    const CLICK_OFFSET = 16; // jarak dari titik klik ke tepi panel
+
+    // Titik referensi: clickCoords > fallback tengah
+    const px = clickCoords ? clickCoords.x : W / 2;
+    const py = clickCoords ? clickCoords.y : H / 2;
+
+    // ── Horizontal: center panel pada px ──
+    let left = px - PANEL_W / 2;
+    left = Math.max(MARGIN, Math.min(left, W - PANEL_W - MARGIN));
+
+    // ── Vertical: panel muncul DI BAWAH titik klik ──
+    let top = py + CLICK_OFFSET;
+    // Jika tidak muat di bawah, taruh di atas
+    if (top + PANEL_MAX_H > H - MARGIN) {
+      top = py - CLICK_OFFSET - PANEL_MAX_H;
+    }
+    // Clamp tetap dalam batas
+    top = Math.max(MARGIN, Math.min(top, H - PANEL_MAX_H - MARGIN));
+
+    return { left, top };
+  }, [clickCoords, embedded]);
+
   if (!feature) return null;
 
   const p = feature.properties;
-  // Sumber kebenaran "sudah dianalisis": ada tidaknya baris block_conditions.
-  // Jangan menyimpulkannya dari n_conditions === 0 — nol kondisi pada blok yang
-  // sudah diperiksa berarti sehat, dan itu hal yang berbeda.
   const hasAnalysis = p.has_conditions ?? (p.priority_level != null);
   const hasBaseline = p.yield_baseline_ton_ha != null;
   const hasProjection = p.yield_predicted_after_intervention != null;
@@ -88,15 +122,16 @@ export default function BlockPanel({ feature, onClose, embedded = false }: Props
     { l: "N total", v: p.soil_nitrogen, u: "" },
   ].filter((x) => x.v != null);
 
+  const className = `block-detail-panel${embedded ? " embedded" : ""}${!embedded ? " bd-dynamic" : ""}`;
+
   return (
-    <aside className={`block-detail-panel${embedded ? " embedded" : ""}`}>
+    <aside className={className} style={posStyle}>
       <div className="bd-head">
         <div>
           <div className="bd-title">{p.block_id}</div>
           <div className="bd-sub">
             {p.estate} · {num(p.area_ha, 1, "ha")}
-            {p.planting_year ? ` · tanam ${p.planting_year} (${p.age_years} thn)` : ""}
-            {p.variety ? ` · ${p.variety}` : ""}
+            {p.planting_year ? ` · ${p.age_years} thn` : ""}
           </div>
         </div>
         {!embedded && onClose && (
@@ -106,60 +141,35 @@ export default function BlockPanel({ feature, onClose, embedded = false }: Props
 
       <div className="bd-body">
         <span className="badge" style={{ background: priorityColor(p.priority_level) }}>
-          {priorityLabel(p.priority_level)}{p.severity_score != null ? ` · skor ${p.severity_score}` : ""}
+          {priorityLabel(p.priority_level)}{p.severity_score != null ? ` · ${p.severity_score}` : ""}
         </span>
 
-        {/* Blok yang belum pernah dianalisis harus mengatakannya. Tanpa ini,
-            panel menampilkan angka kosong dan kalimat "tidak ada kondisi
-            kritis" — terbaca sebagai hasil pemeriksaan, padahal belum ada
-            pemeriksaan sama sekali. */}
         {!hasAnalysis && (
           <div className="bd-nodata">
-            Blok ini <b>belum pernah dianalisis</b>. Angka di bawah diambil
-            langsung dari data mentah bila tersedia; status kesehatan dan
-            rekomendasi belum dapat disimpulkan.
+            Blok ini <b>belum dianalisis</b>.
           </div>
         )}
 
-        {/* Provenance — dari mana angka ini berasal */}
         {(p.eo_last_obs || p.eo_sources?.length) && (
           <div className="bd-provenance">
-            {p.eo_last_obs && <>Observasi terakhir <b>{p.eo_last_obs}</b></>}
-            {p.eo_sources?.length ? (
-              <> · sumber {p.eo_sources.join(", ")}</>
-            ) : null}
+            {p.eo_last_obs && <>{p.eo_last_obs}</>}
+            {p.eo_sources?.length ? <> · {p.eo_sources.join(", ")}</> : null}
           </div>
         )}
 
-        {/* Pengukuran */}
-        <div className="concl-section-title">Pengukuran</div>
-        <div className="metrics">
-          <div className="metric"><div className="l">NDVI</div><div className="v">{num(p.ndvi_value, 3)}</div></div>
-          <div className="metric"><div className="l">Hujan 30h</div><div className="v">{num(p.rainfall_30d_mm, 0, "mm")}</div></div>
-          <div className="metric"><div className="l">Hujan 90h</div><div className="v">{num(p.rainfall_90d_mm, 0, "mm")}</div></div>
-          <div className="metric"><div className="l">Suhu udara</div><div className="v">{num(p.temp_2m_mean, 1, "°C")}</div></div>
-          <div className="metric"><div className="l">LST</div><div className="v">{num(p.lst_celsius, 1, "°C")}</div></div>
-          <div className="metric"><div className="l">pH tanah</div><div className="v">{num(p.soil_ph, 2)}</div></div>
-          <div className="metric"><div className="l">SOC</div><div className="v">{num(p.soil_soc, 1, "g/kg")}</div></div>
-          <div className="metric"><div className="l">LAI</div><div className="v">{num(p.lai_value, 2)}</div></div>
+        {/* Pengukuran — grid compact 2 kolom */}
+        <div className="bd-section">Pengukuran</div>
+        <div className="bd-metrics-compact">
+          <span>NDVI <b>{num(p.ndvi_value, 3)}</b></span>
+          <span>Hujan 30h <b>{num(p.rainfall_30d_mm, 0, "mm")}</b></span>
+          <span>Suhu <b>{num(p.temp_2m_mean, 1, "°C")}</b></span>
+          <span>LST <b>{num(p.lst_celsius, 1, "°C")}</b></span>
+          <span>pH <b>{num(p.soil_ph, 2)}</b></span>
+          <span>SOC <b>{num(p.soil_soc, 1, "g/kg")}</b></span>
         </div>
 
-        {soilExtras.length > 0 && (
-          <>
-            <div className="concl-section-title">Tekstur & kesuburan tanah</div>
-            <div className="metrics">
-              {soilExtras.map((x) => (
-                <div className="metric" key={x.l}>
-                  <div className="l">{x.l}</div>
-                  <div className="v">{num(x.v, 1, x.u)}</div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Kondisi hasil overlay */}
-        <div className="concl-section-title">Kondisi aktif ({p.n_conditions})</div>
+        {/* Kondisi */}
+        <div className="bd-section">Kondisi ({p.n_conditions})</div>
         {p.conditions?.length ? (
           <div className="chips">
             {p.conditions.map((c) => (
@@ -167,73 +177,70 @@ export default function BlockPanel({ feature, onClose, embedded = false }: Props
             ))}
           </div>
         ) : (
-          <div className="bd-note">
-            {hasAnalysis
-              ? "Tidak ada kondisi kritis terdeteksi pada periode ini."
-              : "Belum ada hasil analisis untuk blok ini."}
+          <div className="bd-note-sm">
+            {hasAnalysis ? "Sehat — tidak ada kondisi kritis." : "Belum ada analisis."}
           </div>
         )}
 
-        {/* Intervensi */}
-        <div className="concl-section-title">Rekomendasi intervensi ({p.n_interventions})</div>
-        {p.interventions?.length ? (
-          p.interventions.map((iv, i) => (
-            <div className="interv" key={`${iv.type}-${i}`}>
-              <div className="top">
-                <span className="name">{iv.label}</span>
-                <span className="pri">prioritas {iv.priority}</span>
-              </div>
-              <div className="meta">
-                Lag efek {iv.lag_weeks_min}–{iv.lag_weeks_max} minggu
-                {iv.effort_score != null ? ` · effort ${iv.effort_score}` : ""}
-              </div>
-              <div className="lit">{iv.literature}</div>
-            </div>
-          ))
-        ) : (
-          <div className="bd-note">
-            Belum ada intervensi yang dipicu. Kombinasi kondisi blok ini belum cocok
-            dengan matriks intervensi.
-          </div>
-        )}
-
-        {/* Proyeksi yield — digerbang validasi regresi */}
-        <div className="concl-section-title">Proyeksi produktivitas</div>
-        {hasBaseline ? (
+        {/* Yield ringkas */}
+        {hasBaseline && (
           <>
-            <div className="yield-box">
-              <div><div className="l">Baseline</div><div className="big">{num(p.yield_baseline_ton_ha, 1)}</div></div>
-              <span className="arrow">→</span>
-              <div>
-                <div className="l">Setelah intervensi</div>
-                <div className="big">{hasProjection ? num(p.yield_predicted_after_intervention, 1) : "–"}</div>
-              </div>
-              {uplift && <span className="uplift">+{uplift}%</span>}
-            </div>
-            <div className="disclaimer">
-              R² model = {r2 == null ? "belum dihitung" : r2}{" "}
-              {r2Valid
-                ? <span style={{ color: "var(--normal)", fontWeight: 600 }}>(valid, ≥ 0,40)</span>
-                : <span style={{ color: "var(--warning)", fontWeight: 600 }}>(belum valid — rekomendasi generik)</span>}.
-              Lag efek adalah estimasi berbasis literatur; kondisi lokal dapat
-              memengaruhi waktu respons aktual.
+            <div className="bd-section">Yield</div>
+            <div className="bd-yield-compact">
+              <span>{num(p.yield_baseline_ton_ha, 1)} → {hasProjection ? num(p.yield_predicted_after_intervention, 1) : "–"} t/ha</span>
+              {uplift && <span className="bd-uplift">+{uplift}%</span>}
             </div>
           </>
-        ) : (
-          <div className="bd-note">
-            Belum ada data produksi TBS untuk blok ini, sehingga baseline dan proyeksi
-            yield tidak dapat dihitung. Unggah data panen lewat tab <b>Upload → Table
-            Layer</b>, lalu jalankan ulang overlay (<span className="bd-code">run_overlay.py</span>).
-          </div>
         )}
 
-        {/* Tren temporal */}
-        <div className="concl-section-title">Tren NDVI · hujan · TBS</div>
-        {loadingTs && <div className="bd-note">Memuat time-series…</div>}
-        {!loadingTs && (!ts || ts.series.length === 0) && (
-          <div className="bd-note">Belum ada riwayat observasi untuk blok ini.</div>
+        {/* Detail toggle — intervensi, tanah, tren */}
+        <button className="bd-toggle" onClick={() => setShowDetails((v) => !v)}>
+          {showDetails ? "Sembunyikan detail" : `Detail (${p.n_interventions} intervensi)`}
+        </button>
+
+        {showDetails && (
+          <>
+            {soilExtras.length > 0 && (
+              <>
+                <div className="bd-section">Tanah</div>
+                <div className="bd-metrics-compact">
+                  {soilExtras.map((x) => (
+                    <span key={x.l}>{x.l} <b>{num(x.v, 1, x.u)}</b></span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="bd-section">Intervensi ({p.n_interventions})</div>
+            {p.interventions?.length ? (
+              p.interventions.map((iv, i) => (
+                <div className="bd-interv-compact" key={`${iv.type}-${i}`}>
+                  <span className="bd-interv-name">{iv.label}</span>
+                  <span className="bd-interv-meta">P{iv.priority} · {iv.lag_weeks_min}–{iv.lag_weeks_max} mgg</span>
+                </div>
+              ))
+            ) : (
+              <div className="bd-note-sm">Tidak ada intervensi terpicu.</div>
+            )}
+
+            {hasBaseline && (
+              <>
+                <div className="bd-section">Proyeksi</div>
+                <div className="bd-disclaimer">
+                  R² = {r2 ?? "–"} {r2Valid ? "(valid)" : "(belum valid)"}.
+                  Lag efek berbasis literatur.
+                </div>
+              </>
+            )}
+
+            <div className="bd-section">Tren NDVI · hujan · TBS</div>
+            {loadingTs && <div className="bd-note-sm">Memuat…</div>}
+            {!loadingTs && (!ts || ts.series.length === 0) && (
+              <div className="bd-note-sm">Belum ada riwayat.</div>
+            )}
+            {!loadingTs && ts && ts.series.length > 0 && <TimeSeriesChart series={ts.series} />}
+          </>
         )}
-        {!loadingTs && ts && ts.series.length > 0 && <TimeSeriesChart series={ts.series} />}
       </div>
     </aside>
   );

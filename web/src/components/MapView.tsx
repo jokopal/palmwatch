@@ -42,7 +42,7 @@ const rasterSignature = (cfg: RasterLayerConfig) =>
 interface Props {
   data: BlockCollection | null;
   selectedId?: string | null;
-  onSelect?: (id: string) => void;
+  onSelect?: (id: string, clickCoords?: { x: number; y: number }) => void;
   onMapLoad?: (map: maplibregl.Map) => void;
   interactive?: boolean;
   /** Bila diisi (inset), poligon blok diwarnai choropleth per variabel EO. */
@@ -457,7 +457,10 @@ export default function MapView({
         clickBoundRef.current = true;
         map.on("click", "blocks-fill", (e) => {
           const f = e.features?.[0];
-          if (f && onSelectRef.current) onSelectRef.current(f.properties!.block_id as string);
+          if (f && onSelectRef.current) {
+            const pt = e.point;
+            onSelectRef.current(f.properties!.block_id as string, { x: pt.x, y: pt.y });
+          }
         });
         map.on("mouseenter", "blocks-fill", () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", "blocks-fill", () => (map.getCanvas().style.cursor = ""));

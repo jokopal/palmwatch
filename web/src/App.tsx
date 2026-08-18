@@ -38,6 +38,12 @@ export default function App() {
   const [data, setData] = useState<BlockCollection | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [clickCoords, setClickCoords] = useState<{ x: number; y: number } | null>(null);
+
+  const handleSelect = (id: string, coords?: { x: number; y: number }) => {
+    setSelectedId(id);
+    setClickCoords(coords ?? null);
+  };
   const [error, setError] = useState<string | null>(null);
 
   // Project (multi-kebun) — #4
@@ -279,7 +285,7 @@ export default function App() {
           summary={summary}
           selectedId={selectedId}
           selectedFeature={selectedFeature}
-          onSelect={setSelectedId}
+          onSelect={handleSelect}
           projects={projects}
           projectId={projectId}
           error={error}
@@ -310,7 +316,7 @@ export default function App() {
                     <MapView
                       data={data}
                       selectedId={selectedId}
-                      onSelect={setSelectedId}
+                      onSelect={handleSelect}
                       onMapLoad={setMainMap}
                     />
 
@@ -324,7 +330,8 @@ export default function App() {
                     {selectedFeature && (
                       <BlockPanel
                         feature={selectedFeature}
-                        onClose={() => setSelectedId(null)}
+                        clickCoords={clickCoords}
+                        onClose={() => { setSelectedId(null); setClickCoords(null); }}
                       />
                     )}
 

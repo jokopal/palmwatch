@@ -23,7 +23,7 @@ interface Props {
   summary: Summary | null;
   selectedId: string | null;
   selectedFeature: BlockFeature | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, coords?: { x: number; y: number }) => void;
   projects: Project[];
   projectId: string | null;
   error: string | null;
@@ -50,8 +50,8 @@ export default function MobileShell({
   const closeSheet = () => { setTab("map"); setExpanded(false); };
 
   // Buka sheet Analisis otomatis saat blok dipilih dari peta.
-  const handleSelect = (id: string) => {
-    onSelect(id);
+  const handleSelect = (id: string, coords?: { x: number; y: number }) => {
+    onSelect(id, coords);
     if (tab === "map") setTab("analysis");
   };
 
